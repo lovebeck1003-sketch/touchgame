@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -164,6 +165,38 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
   .pc-only{display:none!important}
   .mob-only{display:block!important}
 }
+/* ===== ACCOUNT ===== */
+#auth-overlay{position:fixed;inset:0;z-index:60;background:radial-gradient(ellipse at center,#0a120d 0%,#000 72%);display:flex;align-items:center;justify-content:center;font-family:'Courier New',monospace;padding:20px;overflow:auto}
+#auth-overlay.hidden{display:none}
+#auth-box{width:100%;max-width:380px;background:rgba(0,0,0,0.86);border:1px solid rgba(0,255,100,0.35);padding:30px 28px;box-shadow:0 0 44px rgba(0,255,100,0.07)}
+#auth-box h1{font-size:22px;letter-spacing:5px;color:#00ff88;text-align:center;margin-bottom:6px}
+.auth-sub{font-size:10px;letter-spacing:3px;color:#4d5a52;text-align:center;margin-bottom:22px}
+#auth-tabs{display:flex;margin-bottom:20px;border:1px solid rgba(255,255,255,0.12)}
+.auth-tab{flex:1;padding:9px 0;background:transparent;border:0;color:#666;font-family:inherit;font-size:12px;letter-spacing:2px;cursor:pointer;transition:all 0.15s}
+.auth-tab.active{background:rgba(0,255,100,0.12);color:#00ff88}
+#auth-form label{display:block;font-size:10px;letter-spacing:2px;color:#7a8a80;margin:0 0 5px}
+#auth-form input[type=text],#auth-form input[type=password]{width:100%;padding:9px 10px;margin-bottom:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);color:#e0e0e0;font-family:inherit;font-size:13px;letter-spacing:1px;outline:none;transition:border-color 0.15s}
+#auth-form input[type=text]:focus,#auth-form input[type=password]:focus{border-color:rgba(0,255,100,0.55)}
+#auth-form input::placeholder{color:#3f4a43;letter-spacing:0}
+#auth-form .hidden{display:none}
+.auth-check{display:flex;align-items:center;gap:7px;font-size:11px;color:#7a8a80;letter-spacing:1px;cursor:pointer;margin-bottom:14px}
+.auth-check input{accent-color:#00ff88;cursor:pointer}
+#auth-msg{min-height:17px;font-size:11px;letter-spacing:1px;line-height:1.5;margin-bottom:10px;color:#ff6b6b}
+#auth-msg.ok{color:#00ff88}
+#auth-submit{width:100%;padding:11px 0;background:rgba(0,255,100,0.14);border:1px solid rgba(0,255,100,0.45);color:#00ff88;font-family:inherit;font-size:13px;letter-spacing:4px;cursor:pointer;transition:all 0.15s}
+#auth-submit:hover{background:rgba(0,255,100,0.26)}
+#auth-submit:disabled{opacity:0.4;cursor:not-allowed}
+.auth-foot{margin-top:18px;font-size:9px;letter-spacing:1px;color:#3a453e;text-align:center;line-height:1.8}
+#user-bar{position:absolute;top:18px;left:18px;display:flex;align-items:center;gap:10px;font-family:'Courier New',monospace}
+#user-bar .uname{font-size:11px;letter-spacing:1px;color:#00ff88}
+#user-bar .uname span{color:#4d5a52;letter-spacing:2px}
+#logout-btn{padding:5px 12px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.2);color:#888;font-family:inherit;font-size:10px;letter-spacing:2px;cursor:pointer;transition:all 0.15s}
+#logout-btn:hover{border-color:rgba(255,120,120,0.5);color:#ff8888}
+@media(max-width:600px){
+  #auth-box{padding:22px 18px}
+  #auth-box h1{font-size:17px;letter-spacing:3px}
+  #user-bar{top:10px;left:10px}
+}
 </style>
 </head>
 <body>
@@ -193,6 +226,10 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
   <div id="stage-cards"></div>
 </div>
 <div id="stage-lobby">
+  <div id="user-bar">
+    <div class="uname"><span>SOLDIER</span> <b id="user-nick">-</b></div>
+    <button id="logout-btn">LOGOUT</button>
+  </div>
   <div class="lobby-clear-msg" id="lobby-clear-msg"></div>
   <div class="lobby-score" id="lobby-score-txt"></div>
   <h2>STAGE SELECT</h2>
@@ -261,12 +298,269 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
   <div class="hint">12종 무기 · 5종 적 · 장애물 등반 · 폭발 효과</div>
 </div>
 
+<div id="auth-overlay">
+  <div id="auth-box">
+    <h1>TACTICAL SURVIVAL</h1>
+    <div class="auth-sub">SOLDIER ACCOUNT</div>
+    <div id="auth-tabs">
+      <button type="button" class="auth-tab active" data-mode="login">로그인</button>
+      <button type="button" class="auth-tab" data-mode="signup">회원가입</button>
+    </div>
+    <form id="auth-form" autocomplete="on">
+      <label for="auth-id">아이디</label>
+      <input id="auth-id" type="text" name="username" autocomplete="username" maxlength="20" placeholder="영문·숫자·_ 3~20자" spellcheck="false">
+      <div id="row-nick" class="hidden">
+        <label for="auth-nick">닉네임</label>
+        <input id="auth-nick" type="text" name="nickname" autocomplete="nickname" maxlength="12" placeholder="게임에 표시될 이름">
+      </div>
+      <label for="auth-pw">비밀번호</label>
+      <input id="auth-pw" type="password" name="password" autocomplete="current-password" maxlength="64" placeholder="4자 이상">
+      <div id="row-pw2" class="hidden">
+        <label for="auth-pw2">비밀번호 확인</label>
+        <input id="auth-pw2" type="password" name="password2" autocomplete="new-password" maxlength="64" placeholder="비밀번호 재입력">
+      </div>
+      <label class="auth-check" for="auth-remember"><input type="checkbox" id="auth-remember" checked>로그인 상태 유지</label>
+      <div id="auth-msg"></div>
+      <button type="submit" id="auth-submit">전투 시작</button>
+    </form>
+    <div class="auth-foot">
+      계정과 진행 상황은 이 브라우저에만 저장됩니다.<br>
+      다른 기기·시크릿 창에서는 공유되지 않습니다.
+    </div>
+  </div>
+</div>
+
+<script>
+/* 로컬 계정 시스템.
+   서버가 없는 정적 페이지라서 계정은 이 브라우저의 localStorage 안에서만 존재한다.
+   비밀번호는 평문 대신 계정별 salt를 섞어 반복 해싱한 값만 저장하지만,
+   검증이 클라이언트에서 일어나는 이상 서버 인증을 대체하지는 못한다.
+   목적은 보안이 아니라 한 기기에서 여러 명이 진행 상황을 나눠 갖는 것. */
+(function(){
+'use strict';
+
+var ACCOUNTS_KEY='tac_surv_accounts';
+var SESSION_KEY='tac_surv_session';
+var LEGACY_KEY='tac_surv_legacy_claimed';
+var KDF_ITER=20000;
+
+/* ---- SHA-256 (순수 JS: crypto.subtle이 없는 file:// 환경에서도 동작) ---- */
+var K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+function rotr(x,n){return ((x>>>n)|(x<<(32-n)))>>>0;}
+function sha256(bytes){
+  var H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  var len=bytes.length, bits=len*8;
+  var buf=new Uint8Array((((len+9)+63)>>6)<<6);
+  buf.set(bytes); buf[len]=0x80;
+  var dv=new DataView(buf.buffer);
+  dv.setUint32(buf.length-8, Math.floor(bits/4294967296));
+  dv.setUint32(buf.length-4, bits>>>0);
+  var w=new Uint32Array(64);
+  for(var i=0;i<buf.length;i+=64){
+    for(var t=0;t<16;t++) w[t]=dv.getUint32(i+t*4);
+    for(t=16;t<64;t++){
+      var x=w[t-15], y=w[t-2];
+      var s0=(rotr(x,7)^rotr(x,18)^(x>>>3))>>>0;
+      var s1=(rotr(y,17)^rotr(y,19)^(y>>>10))>>>0;
+      w[t]=(w[t-16]+s0+w[t-7]+s1)>>>0;
+    }
+    var a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f=H[5],g=H[6],h=H[7];
+    for(t=0;t<64;t++){
+      var S1=(rotr(e,6)^rotr(e,11)^rotr(e,25))>>>0;
+      var ch=((e&f)^((~e)&g))>>>0;
+      var t1=(h+S1+ch+K[t]+w[t])>>>0;
+      var S0=(rotr(a,2)^rotr(a,13)^rotr(a,22))>>>0;
+      var maj=((a&b)^(a&c)^(b&c))>>>0;
+      var t2=(S0+maj)>>>0;
+      h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
+    }
+    H[0]=(H[0]+a)>>>0;H[1]=(H[1]+b)>>>0;H[2]=(H[2]+c)>>>0;H[3]=(H[3]+d)>>>0;
+    H[4]=(H[4]+e)>>>0;H[5]=(H[5]+f)>>>0;H[6]=(H[6]+g)>>>0;H[7]=(H[7]+h)>>>0;
+  }
+  var out=new Uint8Array(32), odv=new DataView(out.buffer);
+  for(var j=0;j<8;j++) odv.setUint32(j*4,H[j]);
+  return out;
+}
+function utf8(s){return new TextEncoder().encode(s);}
+function hex(bytes){var s='';for(var i=0;i<bytes.length;i++)s+=('0'+bytes[i].toString(16)).slice(-2);return s;}
+function concat(a,b){var o=new Uint8Array(a.length+b.length);o.set(a,0);o.set(b,a.length);return o;}
+function randHex(n){var b=new Uint8Array(n);crypto.getRandomValues(b);return hex(b);}
+function derive(password,saltHex){
+  var salt=utf8(saltHex);
+  var h=sha256(concat(salt,utf8(password)));
+  for(var i=0;i<KDF_ITER;i++) h=sha256(concat(salt,h));
+  return hex(h);
+}
+/* 해시 비교는 길이에 상관없이 전 바이트를 훑어 조기 반환을 피한다. */
+function equalHex(a,b){
+  if(typeof a!=='string'||typeof b!=='string'||a.length!==b.length) return false;
+  var diff=0;
+  for(var i=0;i<a.length;i++) diff|=a.charCodeAt(i)^b.charCodeAt(i);
+  return diff===0;
+}
+
+/* ---- 저장소 ---- */
+function readAccounts(){
+  try{var o=JSON.parse(localStorage.getItem(ACCOUNTS_KEY));return (o&&typeof o==='object')?o:{};}catch(e){return {};}
+}
+function writeAccounts(a){try{localStorage.setItem(ACCOUNTS_KEY,JSON.stringify(a));return true;}catch(e){return false;}}
+function readSession(){
+  try{return sessionStorage.getItem(SESSION_KEY)||localStorage.getItem(SESSION_KEY)||null;}catch(e){return null;}
+}
+function writeSession(id,remember){
+  try{
+    if(remember){localStorage.setItem(SESSION_KEY,id);sessionStorage.removeItem(SESSION_KEY);}
+    else{sessionStorage.setItem(SESSION_KEY,id);localStorage.removeItem(SESSION_KEY);}
+  }catch(e){}
+}
+function clearSession(){try{localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);}catch(e){}}
+
+/* 계정 도입 전에 쌓인 진행 데이터는 처음 만들어진 계정 하나가 물려받는다. */
+function claimLegacy(uid){
+  try{
+    if(localStorage.getItem(LEGACY_KEY)) return false;
+    localStorage.setItem(LEGACY_KEY,'1');
+    var save=localStorage.getItem('tac_surv_save');
+    if(!save) return false;
+    localStorage.setItem('tac_surv_save::'+uid,save);
+    var sk=localStorage.getItem('ts_skin');           if(sk) localStorage.setItem('ts_skin::'+uid,sk);
+    var se=localStorage.getItem('ts_sensitivity');    if(se) localStorage.setItem('ts_sensitivity::'+uid,se);
+    return true;
+  }catch(e){return false;}
+}
+
+/* ---- API ---- */
+var resolveReady;
+var GameAuth={
+  ready:new Promise(function(res){resolveReady=res;}),
+  user:null,
+  key:function(base){return this.user?base+'::'+this.user.id:base;},
+  logout:function(){clearSession();location.reload();}
+};
+window.GameAuth=GameAuth;
+
+/* ---- UI ---- */
+var overlay=document.getElementById('auth-overlay');
+var form=document.getElementById('auth-form');
+var idEl=document.getElementById('auth-id');
+var nickEl=document.getElementById('auth-nick');
+var pwEl=document.getElementById('auth-pw');
+var pw2El=document.getElementById('auth-pw2');
+var rememberEl=document.getElementById('auth-remember');
+var msgEl=document.getElementById('auth-msg');
+var submitEl=document.getElementById('auth-submit');
+var rowNick=document.getElementById('row-nick');
+var rowPw2=document.getElementById('row-pw2');
+var tabs=Array.prototype.slice.call(document.querySelectorAll('.auth-tab'));
+var mode='login';
+
+function say(text,ok){msgEl.textContent=text||'';msgEl.className=ok?'ok':'';}
+function setMode(m){
+  mode=m;
+  tabs.forEach(function(t){t.classList.toggle('active',t.dataset.mode===m);});
+  rowNick.classList.toggle('hidden',m!=='signup');
+  rowPw2.classList.toggle('hidden',m!=='signup');
+  pwEl.setAttribute('autocomplete',m==='signup'?'new-password':'current-password');
+  submitEl.textContent=m==='signup'?'계정 만들기':'전투 시작';
+  say('');
+}
+tabs.forEach(function(t){t.addEventListener('click',function(){setMode(t.dataset.mode);idEl.focus();});});
+
+function finish(acc,remember){
+  writeSession(acc.id,remember);
+  GameAuth.user={id:acc.id,nick:acc.nick};
+  var nickOut=document.getElementById('user-nick');
+  if(nickOut) nickOut.textContent=acc.nick;
+  overlay.classList.add('hidden');
+  resolveReady(GameAuth.user);
+}
+
+function submit(){
+  var accounts=readAccounts();
+  var id=idEl.value.trim().toLowerCase();
+  var pw=pwEl.value;
+
+  if(!/^[a-z0-9_]{3,20}$/.test(id)){say('아이디는 영문·숫자·_ 조합 3~20자여야 합니다.');return;}
+  if(pw.length<4){say('비밀번호는 4자 이상이어야 합니다.');return;}
+
+  if(mode==='signup'){
+    var nick=nickEl.value.trim();
+    if(!nick){say('닉네임을 입력해 주세요.');return;}
+    if(nick.length>12){say('닉네임은 12자 이하여야 합니다.');return;}
+    if(pw!==pw2El.value){say('비밀번호가 서로 다릅니다.');return;}
+    if(accounts[id]){say('이미 사용 중인 아이디입니다.');return;}
+    var salt=randHex(16);
+    var acc={id:id,nick:nick,salt:salt,hash:derive(pw,salt),iter:KDF_ITER,createdAt:new Date().toISOString()};
+    accounts[id]=acc;
+    if(!writeAccounts(accounts)){say('저장 공간이 부족해 계정을 만들지 못했습니다.');return;}
+    claimLegacy(id);
+    finish(acc,rememberEl.checked);
+    return;
+  }
+
+  var found=accounts[id];
+  if(!found||!equalHex(derive(pw,found.salt),found.hash)){
+    say('아이디 또는 비밀번호가 올바르지 않습니다.');
+    return;
+  }
+  finish(found,rememberEl.checked);
+}
+
+form.addEventListener('submit',function(e){
+  e.preventDefault();
+  submitEl.disabled=true;
+  say('처리 중...',true);
+  /* derive()가 동기로 수십 ms를 잡아먹으므로 "처리 중"이 먼저 그려지게 한 뒤 실행한다. */
+  setTimeout(function(){
+    try{submit();}
+    catch(err){say('처리 중 오류가 발생했습니다: '+err.message);}
+    finally{submitEl.disabled=false;}
+  },20);
+});
+
+var logoutBtn=document.getElementById('logout-btn');
+if(logoutBtn) logoutBtn.addEventListener('click',function(e){
+  e.stopPropagation();
+  if(confirm('로그아웃할까요? 진행 상황은 계정에 저장되어 있습니다.')) GameAuth.logout();
+});
+
+/* ---- 부팅 ---- */
+(function(){
+  var accounts=readAccounts();
+  var sid=readSession();
+  if(sid&&accounts[sid]){
+    var remembered=false;
+    try{remembered=localStorage.getItem(SESSION_KEY)===sid;}catch(e){}
+    finish(accounts[sid],remembered);
+    return;
+  }
+  clearSession();
+  setMode(Object.keys(accounts).length?'login':'signup');
+  overlay.classList.remove('hidden');
+  setTimeout(function(){idEl.focus();},60);
+})();
+
+})();
+</script>
+
 <script type="importmap">
 {"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
 </script>
 <script type="module">
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+
+/* 로그인이 끝날 때까지 게임 초기화를 멈춘다. 아래 코드가 곧바로 저장 데이터를 읽기 때문. */
+const AUTH = await window.GameAuth.ready;
+/* 저장 키를 계정별로 갈라 한 브라우저에서 여러 명이 각자 진행할 수 있게 한다. */
+const ukey = base => base + '::' + AUTH.id;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x080c11);
@@ -568,7 +862,7 @@ const SKINS=[
   {id:'diamond',  name:'다이아',    pri:0xccddff, sec:0xaabbee, acc:0xeeffff, emissive:0x112244, unlock:10000},
 ];
 let currentSkin='default';
-const savedSkin=localStorage.getItem('ts_skin');
+const savedSkin=localStorage.getItem(ukey('ts_skin'));
 if(savedSkin)currentSkin=savedSkin;
 function applySkin(model){
   if(!model||currentSkin==='default')return;
@@ -598,7 +892,7 @@ function buildSkinUI(){
     el.className='skin-item'+(currentSkin===sk.id?' selected':'');
     if(!unlocked)el.style.opacity='0.35';
     el.innerHTML='<div class="sdot" style="background:linear-gradient(135deg,#'+sk.pri.toString(16).padStart(6,'0')+',#'+sk.acc.toString(16).padStart(6,'0')+')"></div><div class="sname">'+sk.name+'</div>'+(unlocked?'':'<div class="slocked">🔒'+Math.ceil(sk.unlock/1000)+'st</div>');
-    if(unlocked){el.addEventListener('click',()=>{currentSkin=sk.id;localStorage.setItem('ts_skin',sk.id);rebuildGun(wKey);buildSkinUI();});}
+    if(unlocked){el.addEventListener('click',()=>{currentSkin=sk.id;localStorage.setItem(ukey('ts_skin'),sk.id);rebuildGun(wKey);buildSkinUI();});}
     skinGrid.appendChild(el);
   });
 }
@@ -1255,7 +1549,7 @@ function showStageLobby(afterClear){
   let resetBtn=document.getElementById('reset-save');
   if(!resetBtn){
     resetBtn=document.createElement('button');resetBtn.id='reset-save';resetBtn.innerText='DATA RESET';
-    resetBtn.addEventListener('click',e=>{e.stopPropagation();if(confirm('모든 진행 데이터를 초기화하시겠습니까?')){localStorage.removeItem(SAVE_KEY);clearedStages.clear();currentCharacter='assault';showStageLobby(false);}});
+    resetBtn.addEventListener('click',e=>{e.stopPropagation();if(confirm(AUTH.nick+' 계정의 모든 진행 데이터를 초기화하시겠습니까?')){localStorage.removeItem(SAVE_KEY);clearedStages.clear();currentCharacter='assault';showStageLobby(false);}});
     lobbyEl.appendChild(resetBtn);
   }
   lobbyEl.classList.add('active');
@@ -1347,7 +1641,7 @@ const STAGES=[
   {id:12, name:'최후의 전투',sub:'FINAL STAND',          icon:'💀',  waves:6, waveBase:30, diff:5, hpMult:3.8,  spawnBase:750,  spd:7.5,  weapons:['pistol','smg','ar','shotgun','sniper','revolver','lmg','dmr','laser','plasma','minigun','crossbow'],fogColor:0x140005, fogNear:35, fogFar:280, ambCol:0x603040, desc:'지옥의 최전선. 모든 무기. 살아남아라.'},
 ];
 let currentStageId=1,stageWaveNum=1;
-const SAVE_KEY='tac_surv_save';
+const SAVE_KEY=ukey('tac_surv_save');
 function loadSave(){
   try{const d=JSON.parse(localStorage.getItem(SAVE_KEY));if(d) return {cleared:d.cleared?new Set(d.cleared):new Set(),currentCharacter:d.currentCharacter||'assault',lastStage:d.lastStage||0,lastWave:d.lastWave||0};}catch(e){}
   return {cleared:new Set(),currentCharacter:'assault',lastStage:0,lastWave:0};
@@ -1485,9 +1779,9 @@ if(isMobile){
   let joyTouchId=null,joyCX=0,joyCY=0;const lookTouches={};let lookSens=0.004;
   const sensSlider=document.getElementById('sens-slider');const sensVal=document.getElementById('sens-val');
   const sensBtn=document.getElementById('sens-btn');const sensPanel=document.getElementById('sens-panel');const sensClose=document.getElementById('sens-close');
-  const savedSens=localStorage.getItem('ts_sensitivity');
+  const savedSens=localStorage.getItem(ukey('ts_sensitivity'));
   if(savedSens){sensSlider.value=savedSens;sensVal.innerText=savedSens;lookSens=Number(savedSens)*0.0005;}
-  sensSlider.addEventListener('input',()=>{const v=sensSlider.value;sensVal.innerText=v;lookSens=Number(v)*0.0005;localStorage.setItem('ts_sensitivity',v);});
+  sensSlider.addEventListener('input',()=>{const v=sensSlider.value;sensVal.innerText=v;lookSens=Number(v)*0.0005;localStorage.setItem(ukey('ts_sensitivity'),v);});
   sensBtn.addEventListener('click',()=>sensPanel.classList.toggle('active'));
   sensClose.addEventListener('click',()=>sensPanel.classList.remove('active'));
   const JOY_MAX=50;
@@ -1789,11 +2083,11 @@ const ZONES=[
   {name:'R_ARM',  mult:0.70,css:'armshot',  label:'ARM',          test:(lx,ly,lz)=>ly>=1.50&&ly<2.80&&lx>=0.34&&lx<=0.95&&Math.abs(lz)<0.26},
   {name:'LEGS',   mult:0.55,css:'legshot',  label:'LEG',          test:(lx,ly,lz)=>ly>=0.00&&ly<1.50&&Math.abs(lx)<0.44&&Math.abs(lz)<0.24},
 ];
-function getHitZone(bpos,epos){const lx=bpos.x-epos.x,ly=bpos.y,lz=bpos.z-epos.z;for(const z of ZONES){if(z.test(lx,ly,lz))return z;}return ZONES[2];}d
+function getHitZone(bpos,epos){const lx=bpos.x-epos.x,ly=bpos.y,lz=bpos.z-epos.z;for(const z of ZONES){if(z.test(lx,ly,lz))return z;}return ZONES[2];}
 
 let hzTimer=0;const hzEl=document.getElementById('hit-zone-txt');
 function showHitZone(zone,dmg){playSound('hit');if(!hzEl)return;hzEl.className=zone.css;hzEl.innerText=zone.label+'  -'+dmg.toFixed(1);hzEl.style.opacity='1';hzTimer=zone.name==='HEAD'?0.75:0.55;}
-function tickHitZone(dt){if(hzTimer>0){hzTimer-=dt;if(bhzTimer<=0){hzEl.style.opacity='0';}else if(hzTimer<0.15){hzEl.style.opacity=String(hzTimer/0.15);}}}
+function tickHitZone(dt){if(hzTimer>0){hzTimer-=dt;if(hzTimer<=0){hzEl.style.opacity='0';}else if(hzTimer<0.15){hzEl.style.opacity=String(hzTimer/0.15);}}}
 
 function updateLaserBeams(dt){for(let i=laserBeams.length-1;i>=0;i--){const lb=laserBeams[i];lb.life-=dt;const alpha=lb.life/lb.initLife;lb.mesh.material.opacity=Math.max(0,alpha)*(lb.mesh.material.color.getHex()===0xffffff?0.95:0.35);if(lb.life<=0){scene.remove(lb.mesh);lb.mesh.geometry.dispose();lb.mesh.material.dispose();laserBeams.splice(i,1);}}}
 
