@@ -166,9 +166,11 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
   .mob-only{display:block!important}
 }
 /* ===== ACCOUNT ===== */
-#auth-overlay{position:fixed;inset:0;z-index:60;background:radial-gradient(ellipse at center,#0a120d 0%,#000 72%);display:flex;align-items:center;justify-content:center;font-family:'Courier New',monospace;padding:20px;overflow:auto}
+#auth-overlay{position:fixed;inset:0;z-index:60;background:rgba(0,0,3,0.82);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;font-family:'Courier New',monospace;padding:20px;overflow:auto}
 #auth-overlay.hidden{display:none}
-#auth-box{width:100%;max-width:380px;background:rgba(0,0,0,0.86);border:1px solid rgba(0,255,100,0.35);padding:30px 28px;box-shadow:0 0 44px rgba(0,255,100,0.07)}
+#auth-box{position:relative;width:100%;max-width:380px;background:rgba(0,0,0,0.94);border:1px solid rgba(0,255,100,0.35);padding:30px 28px;box-shadow:0 0 44px rgba(0,255,100,0.07)}
+#auth-close{position:absolute;top:8px;right:8px;width:28px;height:28px;background:transparent;border:0;color:#4d5a52;font-family:inherit;font-size:14px;line-height:1;cursor:pointer;transition:color 0.15s}
+#auth-close:hover{color:#ff8888}
 #auth-box h1{font-size:22px;letter-spacing:5px;color:#00ff88;text-align:center;margin-bottom:6px}
 .auth-sub{font-size:10px;letter-spacing:3px;color:#4d5a52;text-align:center;margin-bottom:22px}
 #auth-tabs{display:flex;margin-bottom:20px;border:1px solid rgba(255,255,255,0.12)}
@@ -190,7 +192,12 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
 #user-bar{position:absolute;top:18px;left:18px;display:flex;align-items:center;gap:10px;font-family:'Courier New',monospace}
 #user-bar .uname{font-size:11px;letter-spacing:1px;color:#00ff88}
 #user-bar .uname span{color:#4d5a52;letter-spacing:2px}
-#logout-btn{padding:5px 12px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.2);color:#888;font-family:inherit;font-size:10px;letter-spacing:2px;cursor:pointer;transition:all 0.15s}
+#user-bar.guest .uname{color:#7a8a80}
+#user-bar.guest #logout-btn{display:none}
+#user-bar:not(.guest) #login-btn{display:none}
+#login-btn,#logout-btn{padding:5px 12px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.2);color:#888;font-family:inherit;font-size:10px;letter-spacing:2px;cursor:pointer;transition:all 0.15s}
+#login-btn{background:rgba(0,255,100,0.12);border-color:rgba(0,255,100,0.45);color:#00ff88}
+#login-btn:hover{background:rgba(0,255,100,0.26)}
 #logout-btn:hover{border-color:rgba(255,120,120,0.5);color:#ff8888}
 @media(max-width:600px){
   #auth-box{padding:22px 18px}
@@ -226,8 +233,9 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
   <div id="stage-cards"></div>
 </div>
 <div id="stage-lobby">
-  <div id="user-bar">
-    <div class="uname"><span>SOLDIER</span> <b id="user-nick">-</b></div>
+  <div id="user-bar" class="guest">
+    <div class="uname"><span>SOLDIER</span> <b id="user-nick">GUEST</b></div>
+    <button id="login-btn">LOGIN</button>
     <button id="logout-btn">LOGOUT</button>
   </div>
   <div class="lobby-clear-msg" id="lobby-clear-msg"></div>
@@ -298,8 +306,9 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
   <div class="hint">12종 무기 · 5종 적 · 장애물 등반 · 폭발 효과</div>
 </div>
 
-<div id="auth-overlay">
+<div id="auth-overlay" class="hidden">
   <div id="auth-box">
+    <button type="button" id="auth-close" title="닫기">✕</button>
     <h1>TACTICAL SURVIVAL</h1>
     <div class="auth-sub">SOLDIER ACCOUNT</div>
     <div id="auth-tabs">
@@ -324,8 +333,8 @@ body{overflow:hidden;background:#000;font-family:'Courier New',monospace}
       <button type="submit" id="auth-submit">전투 시작</button>
     </form>
     <div class="auth-foot">
-      계정과 진행 상황은 이 브라우저에만 저장됩니다.<br>
-      다른 기기·시크릿 창에서는 공유되지 않습니다.
+      로그인하면 GUEST 진행 상황과 별개로 계정에 저장됩니다.<br>
+      계정은 이 브라우저에만 있고 다른 기기와 공유되지 않습니다.
     </div>
   </div>
 </div>
@@ -422,7 +431,8 @@ function writeSession(id,remember){
 }
 function clearSession(){try{localStorage.removeItem(SESSION_KEY);sessionStorage.removeItem(SESSION_KEY);}catch(e){}}
 
-/* 계정 도입 전에 쌓인 진행 데이터는 처음 만들어진 계정 하나가 물려받는다. */
+/* GUEST 슬롯에 쌓인 진행 데이터는 처음 만들어진 계정 하나만 물려받는다.
+   원본은 지우지 않으므로 로그아웃하면 GUEST 진행도는 그대로 남아 있다. */
 function claimLegacy(uid){
   try{
     if(localStorage.getItem(LEGACY_KEY)) return false;
@@ -437,11 +447,14 @@ function claimLegacy(uid){
 }
 
 /* ---- API ---- */
-var resolveReady;
 var GameAuth={
-  ready:new Promise(function(res){resolveReady=res;}),
   user:null,
+  /* 로그인 전에는 접미사 없는 키를 그대로 쓴다 = GUEST 슬롯. */
   key:function(base){return this.user?base+'::'+this.user.id:base;},
+  name:function(){return this.user?this.user.nick:'GUEST';},
+  isOpen:function(){return !overlay.classList.contains('hidden');},
+  open:function(){openPanel();},
+  close:function(){closePanel();},
   logout:function(){clearSession();location.reload();}
 };
 window.GameAuth=GameAuth;
@@ -458,6 +471,11 @@ var msgEl=document.getElementById('auth-msg');
 var submitEl=document.getElementById('auth-submit');
 var rowNick=document.getElementById('row-nick');
 var rowPw2=document.getElementById('row-pw2');
+var closeEl=document.getElementById('auth-close');
+var loginBtn=document.getElementById('login-btn');
+var logoutBtn=document.getElementById('logout-btn');
+var userBar=document.getElementById('user-bar');
+var nickOut=document.getElementById('user-nick');
 var tabs=Array.prototype.slice.call(document.querySelectorAll('.auth-tab'));
 var mode='login';
 
@@ -473,13 +491,27 @@ function setMode(m){
 }
 tabs.forEach(function(t){t.addEventListener('click',function(){setMode(t.dataset.mode);idEl.focus();});});
 
+function openPanel(){
+  setMode(Object.keys(readAccounts()).length?'login':'signup');
+  idEl.value='';nickEl.value='';pwEl.value='';pw2El.value='';
+  overlay.classList.remove('hidden');
+  setTimeout(function(){idEl.focus();},60);
+}
+function closePanel(){overlay.classList.add('hidden');say('');}
+
+/* 페이지 로드 시점의 세션 복원. 화면은 건드리지 않고 상태만 맞춘다. */
+function applySession(acc){
+  GameAuth.user={id:acc.id,nick:acc.nick};
+  if(nickOut) nickOut.textContent=acc.nick;
+  if(userBar) userBar.classList.remove('guest');
+}
+
+/* 로그인·회원가입 직후. 세이브 키가 통째로 바뀌므로 다시 읽어 부팅하는 편이 확실하다
+   (진행도·스킨·감도가 모듈 여기저기에 이미 로드되어 있어서 부분 교체는 어긋나기 쉽다). */
 function finish(acc,remember){
   writeSession(acc.id,remember);
-  GameAuth.user={id:acc.id,nick:acc.nick};
-  var nickOut=document.getElementById('user-nick');
-  if(nickOut) nickOut.textContent=acc.nick;
-  overlay.classList.add('hidden');
-  resolveReady(GameAuth.user);
+  applySession(acc);
+  location.reload();
 }
 
 function submit(){
@@ -525,26 +557,25 @@ form.addEventListener('submit',function(e){
   },20);
 });
 
-var logoutBtn=document.getElementById('logout-btn');
+if(loginBtn) loginBtn.addEventListener('click',function(e){e.stopPropagation();openPanel();});
 if(logoutBtn) logoutBtn.addEventListener('click',function(e){
   e.stopPropagation();
   if(confirm('로그아웃할까요? 진행 상황은 계정에 저장되어 있습니다.')) GameAuth.logout();
 });
 
+/* 관문이 아니라 언제든 닫을 수 있는 패널이므로 X·바깥 클릭·ESC를 모두 받는다. */
+if(closeEl) closeEl.addEventListener('click',function(e){e.stopPropagation();closePanel();});
+overlay.addEventListener('click',function(e){if(e.target===overlay)closePanel();});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&GameAuth.isOpen()){e.stopPropagation();closePanel();}
+},true);
+
 /* ---- 부팅 ---- */
 (function(){
   var accounts=readAccounts();
   var sid=readSession();
-  if(sid&&accounts[sid]){
-    var remembered=false;
-    try{remembered=localStorage.getItem(SESSION_KEY)===sid;}catch(e){}
-    finish(accounts[sid],remembered);
-    return;
-  }
-  clearSession();
-  setMode(Object.keys(accounts).length?'login':'signup');
-  overlay.classList.remove('hidden');
-  setTimeout(function(){idEl.focus();},60);
+  if(sid&&accounts[sid]){applySession(accounts[sid]);return;}
+  clearSession();   /* 계정이 지워진 세션이 남아 있으면 GUEST로 시작 */
 })();
 
 })();
@@ -557,10 +588,9 @@ if(logoutBtn) logoutBtn.addEventListener('click',function(e){
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 
-/* 로그인이 끝날 때까지 게임 초기화를 멈춘다. 아래 코드가 곧바로 저장 데이터를 읽기 때문. */
-const AUTH = await window.GameAuth.ready;
-/* 저장 키를 계정별로 갈라 한 브라우저에서 여러 명이 각자 진행할 수 있게 한다. */
-const ukey = base => base + '::' + AUTH.id;
+/* 저장 키를 계정별로 갈라 한 브라우저에서 여러 명이 각자 진행할 수 있게 한다.
+   로그인하지 않으면 접미사 없는 GUEST 슬롯을 쓴다. */
+const ukey = base => window.GameAuth.key(base);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x080c11);
@@ -1549,7 +1579,7 @@ function showStageLobby(afterClear){
   let resetBtn=document.getElementById('reset-save');
   if(!resetBtn){
     resetBtn=document.createElement('button');resetBtn.id='reset-save';resetBtn.innerText='DATA RESET';
-    resetBtn.addEventListener('click',e=>{e.stopPropagation();if(confirm(AUTH.nick+' 계정의 모든 진행 데이터를 초기화하시겠습니까?')){localStorage.removeItem(SAVE_KEY);clearedStages.clear();currentCharacter='assault';showStageLobby(false);}});
+    resetBtn.addEventListener('click',e=>{e.stopPropagation();if(confirm(window.GameAuth.name()+' 진행 데이터를 모두 초기화하시겠습니까?')){localStorage.removeItem(SAVE_KEY);clearedStages.clear();currentCharacter='assault';showStageLobby(false);}});
     lobbyEl.appendChild(resetBtn);
   }
   lobbyEl.classList.add('active');
@@ -1754,6 +1784,8 @@ document.addEventListener('mousedown',e=>{if(!ctrl.isLocked||gameOver)return;if(
 document.addEventListener('mouseup',e=>{if(e.button===0)mouseDown=false;if(e.button===2)aiming=false;});
 function goToMenu(){if(showingLobby||choosingStage)return;saveProg();clearAll();if(spawnInterval){clearInterval(spawnInterval);spawnInterval=null;}mobileActive=false;ctrl.unlock();showStageLobby(false);}
 document.addEventListener('keydown',e=>{
+  /* 로그인 패널에 타이핑 중이면 아이디·비밀번호 글자가 조작키로 새지 않도록 한다. */
+  if(window.GameAuth.isOpen())return;
   if(e.code==='Escape'){goToMenu();return;}
   if(e.code==='KeyW')mF=true;if(e.code==='KeyS')mB=true;if(e.code==='KeyA')mL=true;if(e.code==='KeyD')mR=true;
   if(e.code==='KeyR')startReload();
@@ -1762,7 +1794,7 @@ document.addEventListener('keydown',e=>{
   if(mp[e.code]&&getCurStage().weapons.includes(mp[e.code]))switchWep(mp[e.code]);
 });
 document.getElementById('menu-btn').addEventListener('click',goToMenu);
-document.addEventListener('keyup',e=>{if(e.code==='KeyW')mF=false;if(e.code==='KeyS')mB=false;if(e.code==='KeyA')mL=false;if(e.code==='KeyD')mR=false;});
+document.addEventListener('keyup',e=>{if(window.GameAuth.isOpen())return;if(e.code==='KeyW')mF=false;if(e.code==='KeyS')mB=false;if(e.code==='KeyA')mL=false;if(e.code==='KeyD')mR=false;});
 document.addEventListener('wheel',e=>{
   if(!ctrl.isLocked||gameOver||choosingStage)return;e.preventDefault();
   const stW=getCurStage().weapons;let idx=WKEYS.indexOf(wKey);const dir2=e.deltaY>0?1:-1;let tries=0;
