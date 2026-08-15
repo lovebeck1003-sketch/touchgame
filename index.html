@@ -1936,7 +1936,15 @@ $('tutNext').onclick=()=>{ if(tutIdx>=TUT_STEPS.length-1)tutEnd(false); else tut
 $('tutPrev').onclick=()=>tutShow(tutIdx-1);
 $('tutSkip').onclick=()=>tutEnd(true);
 $('tutClose').onclick=()=>tutEnd(true);
-$('tutBlock').onclick=()=>tutEnd(true);     // 어두운 배경을 눌러도 건너뛰기
+// 어두운 배경을 누르면 건너뛰기 — 단, 강조된 노란 네모 안쪽은 예외
+$('tutBlock').onclick=e=>{
+  const ring=$('tutRing');
+  if(ring.style.display!=='none'&&!ring.classList.contains('nofocus')){
+    const r=ring.getBoundingClientRect();
+    if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom)return;
+  }
+  tutEnd(true);
+};
 addEventListener('keydown',e=>{
   if(tutIdx<0)return;
   if(e.key==='Escape'){ tutEnd(true); }
