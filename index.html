@@ -233,6 +233,11 @@
     border-radius:9px;padding:7px 12px;font-size:12px;cursor:pointer}
   #tutBox button.main{background:var(--gold);border-color:var(--gold);color:#0c0e16;font-weight:700}
   #tutBox button:active{transform:scale(.95)}
+  #tutBox button.ghost{border-color:transparent;background:transparent;color:var(--dim)}
+  #tutClose{position:absolute;top:8px;right:8px;width:26px;height:26px;padding:0;
+    line-height:1;font-size:14px;color:var(--dim);background:transparent;border-color:transparent}
+  #tutClose:hover{color:var(--txt)}
+  #tutBox h3{padding-right:26px}
   @media(max-width:720px){ #tutBox{padding:11px} #tutBox h3{font-size:14px} #tutBox p{font-size:12px} }
 </style>
 </head>
@@ -302,11 +307,12 @@
 <div id="tutBlock"></div>
 <div id="tutRing" style="display:none"></div>
 <div id="tutBox" style="display:none">
+  <button id="tutClose" title="튜토리얼 건너뛰기">✕</button>
   <h3 id="tutTitle"></h3>
   <p id="tutText"></p>
   <div class="row">
     <span class="step" id="tutStep"></span>
-    <button id="tutSkip">그만보기</button>
+    <button class="ghost" id="tutSkip">건너뛰기</button>
     <button id="tutPrev">이전</button>
     <button class="main" id="tutNext">다음</button>
   </div>
@@ -1907,6 +1913,7 @@ function tutShow(i){
   $('tutText').innerHTML=s.d;
   $('tutStep').textContent=`${i+1} / ${TUT_STEPS.length}`;
   $('tutPrev').style.display=i===0?'none':'';
+  $('tutSkip').textContent=i===0?'튜토리얼 건너뛰기':'건너뛰기';
   $('tutNext').textContent=(i===TUT_STEPS.length-1)?'시작하기':'다음';
   requestAnimationFrame(tutPlace);
 }
@@ -1916,16 +1923,26 @@ function tutStart(){
   tutIdx=-1;
   tutShow(0);
 }
-function tutEnd(){
+function tutEnd(skipped){
+  if(tutIdx<0)return;
   $('tutBlock').classList.remove('show');
   $('tutRing').style.display='none';
   $('tutBox').style.display='none';
   tutIdx=-1;
   S.tutorialDone=true; save();
+  if(skipped) floatNum('튜토리얼 건너뜀 · ❓ 도움말에서 다시 볼 수 있어요',false,'#8b93ad');
 }
-$('tutNext').onclick=()=>{ if(tutIdx>=TUT_STEPS.length-1)tutEnd(); else tutShow(tutIdx+1); };
+$('tutNext').onclick=()=>{ if(tutIdx>=TUT_STEPS.length-1)tutEnd(false); else tutShow(tutIdx+1); };
 $('tutPrev').onclick=()=>tutShow(tutIdx-1);
-$('tutSkip').onclick=tutEnd;
+$('tutSkip').onclick=()=>tutEnd(true);
+$('tutClose').onclick=()=>tutEnd(true);
+$('tutBlock').onclick=()=>tutEnd(true);     // 어두운 배경을 눌러도 건너뛰기
+addEventListener('keydown',e=>{
+  if(tutIdx<0)return;
+  if(e.key==='Escape'){ tutEnd(true); }
+  else if(e.key==='ArrowRight'||e.key==='Enter'){ $('tutNext').onclick(); }
+  else if(e.key==='ArrowLeft'){ if(tutIdx>0)tutShow(tutIdx-1); }
+});
 $('tutBtn').onclick=tutStart;
 addEventListener('resize',()=>{ if(tutIdx>=0)tutPlace(); });
 
