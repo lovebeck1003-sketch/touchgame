@@ -214,6 +214,26 @@
   @media(max-width:680px){
     body,button{font-family:'Segoe UI','Malgun Gothic','WinEmoji',sans-serif}
   }
+
+  /* ── 튜토리얼 ── */
+  #tutBlock{position:fixed;inset:0;z-index:90;display:none}
+  #tutBlock.show{display:block}
+  #tutRing{position:fixed;z-index:91;border-radius:14px;pointer-events:none;
+    border:2px solid var(--gold);box-shadow:0 0 0 9999px rgba(4,6,12,.74),0 0 18px rgba(255,206,84,.6);
+    transition:all .25s ease}
+  #tutRing.nofocus{border-color:transparent;box-shadow:0 0 0 9999px rgba(4,6,12,.74)}
+  #tutBox{position:fixed;z-index:92;max-width:320px;width:min(320px,calc(100vw - 24px));
+    background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px;
+    box-shadow:0 12px 32px rgba(0,0,0,.6);transition:all .25s ease}
+  #tutBox h3{font-size:15px;color:var(--gold);margin-bottom:6px}
+  #tutBox p{font-size:12.5px;line-height:1.6;color:var(--txt)}
+  #tutBox .row{display:flex;align-items:center;gap:8px;margin-top:12px}
+  #tutBox .step{font-size:11px;color:var(--dim);margin-right:auto}
+  #tutBox button{border:1px solid var(--line);background:var(--panel);color:var(--txt);
+    border-radius:9px;padding:7px 12px;font-size:12px;cursor:pointer}
+  #tutBox button.main{background:var(--gold);border-color:var(--gold);color:#0c0e16;font-weight:700}
+  #tutBox button:active{transform:scale(.95)}
+  @media(max-width:720px){ #tutBox{padding:11px} #tutBox h3{font-size:14px} #tutBox p{font-size:12px} }
 </style>
 </head>
 <body>
@@ -268,6 +288,7 @@
 
   <div id="footer">
     <div id="saveStat">불러오는 중…</div>
+    <button class="btn" id="tutBtn">❓ 도움말</button>
     <button class="btn" id="buyMaxBtn">구매: x1</button>
     <button class="btn" id="prestigeBtn">💀 환생</button>
   </div>
@@ -277,6 +298,19 @@
   <h2 id="mTitle"></h2><p id="mBody"></p>
   <div id="modalBtns"></div>
 </div></div>
+
+<div id="tutBlock"></div>
+<div id="tutRing" style="display:none"></div>
+<div id="tutBox" style="display:none">
+  <h3 id="tutTitle"></h3>
+  <p id="tutText"></p>
+  <div class="row">
+    <span class="step" id="tutStep"></span>
+    <button id="tutSkip">그만보기</button>
+    <button id="tutPrev">이전</button>
+    <button class="main" id="tutNext">다음</button>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -673,7 +707,7 @@ function defaultState(){
     autoProgress:true, killsThisStage:0, lastSeen:Date.now(),
     totalKills:0, prestiges:0, bestStage:1,
     achClaimed:{}, bossCleared:{}, exped:{}, expedDone:0, lastDaily:0, rouletteSpins:0,
-    endingSeen:false,
+    endingSeen:false, tutorialDone:false,
   };
 }
 const FINAL_STAGE=500;
@@ -1792,6 +1826,109 @@ function welcomeBack(){
   }
 }
 
+// ── 튜토리얼 ──
+const TUT_STEPS=[
+  {t:'⚔️ 방치의 던전에 오신 걸 환영합니다!',
+   d:'몬스터를 잡아 골드를 모으고, 동료와 장비를 키워 더 깊은 스테이지로 내려가는 방치형 게임이에요.<br>게임을 꺼도 동료들은 계속 싸웁니다!<br><br>간단한 조작법을 안내해 드릴게요.'},
+  {sel:'#stage', t:'👆 몬스터를 클릭하세요',
+   d:'몬스터를 탭/클릭하면 <b>클릭 피해</b>만큼 데미지를 줍니다.<br>연속으로 클릭하면 <b>콤보</b>가 쌓여 피해가 늘어나고, 가끔 <b>치명타</b>도 터집니다.'},
+  {sel:'#hpWrap', t:'❤️ 체력과 처치 수',
+   d:'체력을 모두 깎으면 몬스터가 쓰러지고 <b>골드</b>를 얻어요.<br>일반 스테이지는 <b>4마리</b>를 잡으면 다음으로 넘어가고, 10의 배수는 <b>제한 시간이 있는 보스</b>입니다.'},
+  {sel:'#topbar', t:'📊 4가지 핵심 수치',
+   d:'💰 <b>골드</b> — 동료·강화 구매<br>⚔️ <b>초당 피해</b> — 가만히 있어도 들어가는 자동 피해<br>👆 <b>클릭 피해</b> — 한 번 클릭 시 피해<br>💎 <b>정수</b> — 환생/뽑기로 얻는 귀한 재화'},
+  {sel:'#stageHead', t:'🧭 스테이지 이동 · 자동 진행',
+   d:'◀ ▶ 로 이미 클리어한 스테이지를 오갈 수 있어요.<br><b>자동진행</b>을 켜두면 클리어할 때마다 자동으로 다음 스테이지로 전진합니다. 벽에 막히면 꺼두고 골드를 모으세요.'},
+  {sel:'#skillBar', t:'🔥 스킬',
+   d:'쿨타임마다 쓸 수 있는 강력한 버프예요. 피해나 골드 획득량이 크게 오르니 <b>보스 직전에</b> 쓰는 게 좋습니다.'},
+  {sel:'#shopTabs', t:'🏪 성장은 여기서',
+   d:'동료 · 대장간 · 강화 · 연구 · 뽑기 · 탐험 · 정수 · 유물 · 도전 탭이 있어요.<br>탭에 <b>빨간 점</b>이 보이면 받을 보상이나 완료된 작업이 있다는 뜻입니다.'},
+  {sel:'#shopList', tab:'hero', t:'🛡️ 먼저 동료부터',
+   d:'가장 기본은 <b>동료</b>입니다. 동료를 살수록 <b>초당 피해</b>가 올라 자리를 비워도 사냥이 계속돼요.<br>골드가 모이면 망설이지 말고 계속 구매하세요!'},
+  {sel:'#buyMaxBtn', t:'🔢 한 번에 여러 개',
+   d:'이 버튼으로 x1 / x10 / x100 / 최대 구매를 바꿀 수 있어요. 후반엔 <b>최대</b>로 두면 편합니다.'},
+  {sel:'#prestigeBtn', t:'💀 환생',
+   d:'일정 스테이지를 넘기면 환생할 수 있어요. 골드와 동료는 초기화되지만 <b>정수</b>를 얻고, 정수 강화·유물·장비·연구는 그대로 남아 훨씬 빠르게 다시 내려갑니다.'},
+  {sel:'#tutBtn', t:'✅ 준비 끝!',
+   d:'이 안내는 언제든 <b>❓ 도움말</b> 버튼으로 다시 볼 수 있어요.<br><br>그럼, 던전에서 행운을 빕니다! ⚔️'},
+];
+let tutIdx=-1;
+function tutTargetOf(s){
+  if(!s.sel)return null;
+  const el=document.querySelector(s.sel);
+  if(!el)return null;
+  const r=el.getBoundingClientRect();
+  if(r.width<8||r.height<8)return null;   // 아직 안 열린/빈 요소는 건너뜀
+  return el;
+}
+function tutPlace(){
+  const s=TUT_STEPS[tutIdx]; if(!s)return;
+  const ring=$('tutRing'), box=$('tutBox');
+  const el=tutTargetOf(s);
+  const vw=innerWidth, vh=innerHeight;
+  if(el){
+    const r=el.getBoundingClientRect(), p=6;
+    ring.classList.remove('nofocus');
+    ring.style.display='block';
+    ring.style.left=(r.left-p)+'px'; ring.style.top=(r.top-p)+'px';
+    ring.style.width=(r.width+p*2)+'px'; ring.style.height=(r.height+p*2)+'px';
+  }else{
+    ring.classList.add('nofocus');
+    ring.style.display='block';
+    ring.style.left='50%'; ring.style.top='50%'; ring.style.width='0px'; ring.style.height='0px';
+  }
+  box.style.display='block';
+  const bw=box.offsetWidth, bh=box.offsetHeight;
+  let left,top;
+  if(el){
+    const r=el.getBoundingClientRect();
+    left=Math.min(Math.max(8, r.left+r.width/2-bw/2), vw-bw-8);
+    top=r.bottom+14;
+    if(top+bh>vh-8) top=r.top-bh-14;               // 아래 공간이 없으면 위로
+    if(top<8) top=Math.min(vh-bh-8, Math.max(8,(vh-bh)/2)); // 그래도 없으면 화면 중앙
+  }else{
+    left=(vw-bw)/2; top=(vh-bh)/2;
+  }
+  box.style.left=Math.round(left)+'px'; box.style.top=Math.round(Math.max(8,top))+'px';
+}
+function tutShow(i){
+  if(i<0)i=0;
+  // 표시할 대상이 없는 단계는 진행 방향에 맞춰 건너뛴다
+  const dir=(i>tutIdx)?1:-1;
+  while(i>=0&&i<TUT_STEPS.length&&TUT_STEPS[i].sel&&!tutTargetOf(TUT_STEPS[i])) i+=dir;
+  if(i<0){ i=0; }
+  if(i>=TUT_STEPS.length){ tutEnd(); return; }
+  const s=TUT_STEPS[i];
+  if(s.tab){
+    const tb=document.querySelector(`.tab[data-tab="${s.tab}"]`);
+    if(tb&&!tb.classList.contains('active')) tb.onclick();
+  }
+  tutIdx=i;
+  $('tutTitle').innerHTML=s.t;
+  $('tutText').innerHTML=s.d;
+  $('tutStep').textContent=`${i+1} / ${TUT_STEPS.length}`;
+  $('tutPrev').style.display=i===0?'none':'';
+  $('tutNext').textContent=(i===TUT_STEPS.length-1)?'시작하기':'다음';
+  requestAnimationFrame(tutPlace);
+}
+function tutStart(){
+  closeModal();
+  $('tutBlock').classList.add('show');
+  tutIdx=-1;
+  tutShow(0);
+}
+function tutEnd(){
+  $('tutBlock').classList.remove('show');
+  $('tutRing').style.display='none';
+  $('tutBox').style.display='none';
+  tutIdx=-1;
+  S.tutorialDone=true; save();
+}
+$('tutNext').onclick=()=>{ if(tutIdx>=TUT_STEPS.length-1)tutEnd(); else tutShow(tutIdx+1); };
+$('tutPrev').onclick=()=>tutShow(tutIdx-1);
+$('tutSkip').onclick=tutEnd;
+$('tutBtn').onclick=tutStart;
+addEventListener('resize',()=>{ if(tutIdx>=0)tutPlace(); });
+
 // ── 초기화 ──
 load();
 spawnMob();
@@ -1800,6 +1937,14 @@ updateTop(); updateStageLabel(); renderShop();
 welcomeBack();
 $('saveStat').textContent='💾 자동 저장 중 · 최고 스테이지 '+S.maxStage;
 setInterval(updateTop,250);
+
+// 첫 플레이라면 튜토리얼 자동 실행(출석/오프라인 보상 모달이 닫힌 뒤에)
+if(!S.tutorialDone){
+  const waitModal=setInterval(()=>{
+    if($('modalBg').classList.contains('show'))return;
+    clearInterval(waitModal); tutStart();
+  },400);
+}
 </script>
 </body>
-</html      
+</html>
