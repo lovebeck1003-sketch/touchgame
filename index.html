@@ -271,6 +271,15 @@
   #tutClose:hover{color:var(--txt)}
   #tutBox h3{padding-right:26px}
   @media(max-width:720px){ #tutBox{padding:11px} #tutBox h3{font-size:14px} #tutBox p{font-size:12px} }
+
+  /* ── 도움말 요약 ── */
+  #modal .help{text-align:left;max-height:58vh;overflow-y:auto;margin-bottom:16px}
+  #modal .help .hs{border:1px solid var(--line);background:var(--panel2);border-radius:11px;
+    padding:9px 11px;margin-bottom:7px}
+  #modal .help .hs .ht{font-size:12.5px;font-weight:700;color:var(--gold);margin-bottom:3px}
+  #modal .help .hs .hd{font-size:12px;line-height:1.55;color:var(--txt)}
+  #modal .help .hs .hd b{color:var(--gold)}
+  #modal .help .tip{font-size:11px;color:var(--dim);line-height:1.5;margin-top:8px;text-align:center}
 </style>
 </head>
 <body>
@@ -2012,7 +2021,28 @@ addEventListener('keydown',e=>{
   else if(e.key==='ArrowRight'||e.key==='Enter'){ $('tutNext').onclick(); }
   else if(e.key==='ArrowLeft'){ if(tutIdx>0)tutShow(tutIdx-1); }
 });
-$('tutBtn').onclick=tutStart;
+// ── 도움말: 튜토리얼 요약본 ──
+const HELP_SECTIONS=[
+  {t:'👆 전투',      d:'몬스터를 탭하면 <b>클릭 피해</b>가 들어가고, 연속 클릭 시 <b>콤보</b>·<b>치명타</b>가 터집니다. 일반 스테이지는 4마리, 10의 배수는 <b>제한 시간 보스</b>.'},
+  {t:'📊 4가지 수치', d:'💰 골드 = 구매 재화 · ⚔️ 초당 피해 = 방치 중에도 들어가는 자동 피해 · 👆 클릭 피해 · 💎 정수 = 환생/뽑기로 얻는 귀한 재화.'},
+  {t:'🧭 스테이지',   d:'◀ ▶ 로 클리어한 스테이지를 오갈 수 있어요. <b>자동진행</b>을 켜면 클리어마다 전진, 벽에 막히면 꺼두고 골드를 모으세요.'},
+  {t:'🔥 스킬',      d:'쿨타임마다 쓰는 강력한 버프. 피해·골드 획득이 크게 오르니 <b>보스 직전</b>에 쓰는 게 이득입니다.'},
+  {t:'🏪 성장',      d:'동료 · 대장간 · 강화 · 연구 · 뽑기 · 탐험 · 정수 · 유물 · 도전 탭에서 성장합니다. 탭의 <b>빨간 점</b>은 받을 보상이 있다는 뜻.'},
+  {t:'🛡️ 우선순위',  d:'가장 먼저 <b>동료</b>. 살수록 초당 피해가 올라 자리를 비워도 사냥이 이어집니다. 골드가 모이면 계속 구매하세요.'},
+  {t:'🔢 대량 구매',  d:'구매 배수 버튼으로 x1 / x10 / x100 / 최대를 바꿀 수 있어요. 후반엔 <b>최대</b>가 편합니다.'},
+  {t:'💀 환생',      d:'일정 스테이지 이후 환생 가능. 골드·동료는 초기화되지만 <b>정수</b>를 얻고 정수 강화·유물·장비·연구는 남아 훨씬 빠르게 내려갑니다.'},
+  {t:'🌙 방치 보상',  d:'게임을 꺼도 동료들은 싸웁니다. 다시 접속하면 자리를 비운 동안의 보상을 받아요.'},
+];
+function openHelp(){
+  const body='<div class="help">'+
+    HELP_SECTIONS.map(h=>`<div class="hs"><div class="ht">${h.t}</div><div class="hd">${h.d}</div></div>`).join('')+
+    '<div class="tip">단계별 안내가 필요하면 아래 <b>튜토리얼 다시 보기</b>를 누르세요.</div></div>';
+  openModal('❓ 도움말', body, [
+    {t:'튜토리얼 다시 보기', cls:'', fn:()=>{ closeModal(); tutStart(); }},
+    {t:'닫기', cls:'ready', fn:closeModal},
+  ]);
+}
+$('tutBtn').onclick=openHelp;
 addEventListener('resize',()=>{ if(tutIdx>=0)tutPlace(); });
 
 // ── 계정(로컬) ──
