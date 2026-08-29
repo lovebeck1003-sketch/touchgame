@@ -500,7 +500,7 @@ const HEROES=[
   {id:'detonator', nm:'멸절의 폭심',  ico:'🧨', dps:1.1e76, cost:5.7e112, seal:{p:18, st:300}},
   {id:'apex',      nm:'만유의 정점',  ico:'🛕', dps:6.6e76, cost:8.0e113, seal:{p:35, st:500}},
   // ── 종결 동료 ── 게임의 모든 기록을 끝까지 밀어야 만나는 마지막 동료
-  {id:'omega',     nm:'종언의 관측자', ico:'🌌', dps:9.9e79, cost:1.4e117,
+  {id:'finale',    nm:'종언의 관측자', ico:'🌌', dps:9.9e79, cost:1.4e117,
     seal:{p:60, st:777, relics:'all', heroes:'all', legend:3}},
 ];
 // ── 강화(골드) ──
@@ -735,7 +735,7 @@ const HERO_PERKS={
   mountain: {nm:'산악 붕괴',  type:'dps',      per:0.50, every:40, fmt:v=>'모든 DPS +'+Math.round(v*100)+'%'},
   detonator:{nm:'멸절 폭발',  type:'critDmg',  per:2,    every:25, fmt:v=>'치명타 피해 +'+Math.round(v*100)+'%'},
   apex:     {nm:'정점의 빛',  type:'allDmg',   per:0.65, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
-  omega:    {nm:'종언',        type:'allDmg',   per:5.00, every:1,  fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
+  finale:   {nm:'종언',        type:'allDmg',   per:5.00, every:1,  fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
 };
 function perkSteps(have,every){ return have>0?1+Math.floor((have-1)/every):0; }
 
@@ -764,7 +764,7 @@ function sealText(i){
 // 종결 동료의 봉인이 풀리는 순간은 한 번 크게 알린다
 function checkOmegaUnlock(){
   if((S.prestiges||0)<60||S.omegaSeen)return;      // 가장 싸게 걸러낸다
-  const h=HEROES.find(x=>x.id==='omega'); if(!h||isSealed(h))return;
+  const h=HEROES.find(x=>x.id==='finale'); if(!h||isSealed(h))return;
   S.omegaSeen=true; save();
   openModal('🌌 봉인 해제 — 종언의 관측자',
     `모든 기록을 끝까지 밀어붙인 자에게만<br>그가 눈길을 줍니다.<br><br>`+
