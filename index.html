@@ -327,6 +327,7 @@
         <div class="tab" data-tab="gem">💎 정수</div>
         <div class="tab" data-tab="relic">📜 유물</div>
         <div class="tab" data-tab="ach">🏅 도전</div>
+        <div class="tab" data-tab="rank">🏆 랭킹</div>
       </div>
       <div id="shopList"></div>
     </div>
@@ -337,6 +338,7 @@
     <div id="whoami"></div>
     <button class="btn" id="logoutBtn">🚪 로그아웃</button>
     <button class="btn" id="tutBtn">❓ 도움말</button>
+    <button class="btn" id="devBtn" title="개발자 전용">🛠️</button>
     <button class="btn" id="buyMaxBtn">구매: x1</button>
     <button class="btn" id="prestigeBtn">💀 환생</button>
   </div>
@@ -389,6 +391,8 @@ const LEGACY_SAVE_KEY='idleDungeonSave_v1';   // 계정 기능 이전의 세이�
 let SAVE_KEY=LEGACY_SAVE_KEY;                 // 로그인한 계정에 따라 바뀐다
 const ACCOUNTS_KEY='idleDungeonAccounts_v1';
 const SESSION_KEY='idleDungeonSession_v1';
+const RANK_KEY='idleDungeonRanks_v1';
+const TUT_SEEN_KEY='idleDungeonTutorialSeen_v1';  // 이 기기에서 튜토리얼을 한 번이라도 봤는지
 let gameReady=false;                          // 로그인 전에는 게임 루프를 돌리지 않는다
 const OFFLINE_CAP_H=8;            // 오프라인 보상 최대 8시간
 const $=id=>document.getElementById(id);
@@ -492,9 +496,12 @@ const HEROES=[
   {id:'fortune',   nm:'행운의 화신',  ico:'🍀', dps:8.4e72, cost:1.5e108},
   {id:'compass',   nm:'운명의 길잡이',ico:'🧭', dps:5.0e73, cost:2.1e109},
   {id:'colossus',  nm:'자유의 거상',  ico:'🗽', dps:3.0e74, cost:2.9e110},
-  {id:'mountain',  nm:'천산의 군주',  ico:'🏔️', dps:1.8e75, cost:4.1e111},
-  {id:'detonator', nm:'멸절의 폭심',  ico:'🧨', dps:1.1e76, cost:5.7e112},
-  {id:'apex',      nm:'만유의 정점',  ico:'🛕', dps:6.6e76, cost:8.0e113},
+  {id:'mountain',  nm:'천산의 군주',  ico:'🏔️', dps:1.8e75, cost:4.1e111, seal:{p:8,  st:150}},
+  {id:'detonator', nm:'멸절의 폭심',  ico:'🧨', dps:1.1e76, cost:5.7e112, seal:{p:18, st:300}},
+  {id:'apex',      nm:'만유의 정점',  ico:'🛕', dps:6.6e76, cost:8.0e113, seal:{p:35, st:500}},
+  // ── 종결 동료 ── 게임의 모든 기록을 끝까지 밀어야 만나는 마지막 동료
+  {id:'omega',     nm:'종언의 관측자', ico:'🌌', dps:9.9e79, cost:1.4e117,
+    seal:{p:60, st:777, relics:'all', heroes:'all', legend:3}},
 ];
 // ── 강화(골드) ──
 const UPGRADES=[
@@ -537,6 +544,19 @@ const RARITIES=[
   {nm:'전설', col:'#ffce54', mult:8.5},
 ];
 const RARITY_WEIGHT=[50,28,14,6,2];     // 보통~전설 가중치
+// ── 저주받은 장비 ──
+// 제작/재련 시 일정 확률로 저주가 붙는다.
+// 저주받은 장비는 자신의 효과가 2배지만 대가를 치릅니다 — 빌드 선택지가 생긴다.
+const CURSE_CHANCE=0.30, PURIFY_COST=10, CURSE_BOOST=2;
+const CURSES=[
+  {id:'greed',  nm:'탐욕의 저주', ico:'🪙', desc:'골드 획득 −45%', ap:fx=>{fx.gold*=0.55;}},
+  {id:'frail',  nm:'약체의 저주', ico:'🦴', desc:'클릭 피해 −50%', ap:fx=>{fx.click*=0.50;}},
+  {id:'slow',   nm:'정체의 저주', ico:'🐌', desc:'모든 DPS −30%', ap:fx=>{fx.dps*=0.70;}},
+  {id:'blind',  nm:'장님의 저주', ico:'🌑', desc:'치명타 확률 −15%p', ap:fx=>{fx.crit-=0.15;}},
+  {id:'hubris', nm:'오만의 저주', ico:'👑', desc:'보스에게 주는 피해 −50%', ap:fx=>{fx.bossDmg*=0.50;}},
+];
+function curseById(id){ return CURSES.find(c=>c.id===id)||null; }
+function rollCurse(){ return CURSES[Math.floor(Math.random()*CURSES.length)].id; }
 const EQUIP_SLOTS=[
   {id:'weapon', ico:'⚔️', nm:'무기',   stat:'click',  per:0.08, fmt:v=>'클릭 피해 +'+Math.round(v*100)+'%'},
   {id:'armor',  ico:'🛡️', nm:'갑옷',   stat:'allDmg', per:0.05, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
@@ -591,7 +611,10 @@ const EVENTS=[
   {kind:'buff', id:'clones',  ico:'👥', nm:'분신 소환',   type:'auto', value:5,    dur:30, desc:'자동 공격 +5회/초'},
   // 선택 이벤트
   {kind:'choice', id:'merchant', ico:'🧙', nm:'떠돌이 상인', desc:'골드를 정수로 교환',
-    roll:()=>({gems:2+Math.floor(Math.random()*3), cost:Math.max(Math.ceil(S.gold*0.55), Math.ceil(goldReward(Math.max(1,S.maxStage),false)*300))}),
+    // 정상화: 정수를 더 많이 주고, 가격은 보유 골드의 35%를 넘지 않는다
+    roll:()=>{ const gems=4+Math.floor(Math.random()*4);
+      const base=Math.ceil(goldReward(Math.max(1,S.maxStage),false)*20*gems);
+      return {gems, cost:Math.max(100, Math.ceil(Math.min(base, S.gold*0.35)))}; },
     bar:d=>'💎 '+d.gems+' ↔ 💰 '+fmt(d.cost)},
   {kind:'choice', id:'gambler', ico:'🎰', nm:'수상한 도박꾼', desc:'골드 도박 (60% 2배)',
     roll:()=>({bet:Math.max(Math.ceil(S.gold*0.3),100)}),
@@ -712,10 +735,48 @@ const HERO_PERKS={
   mountain: {nm:'산악 붕괴',  type:'dps',      per:0.50, every:40, fmt:v=>'모든 DPS +'+Math.round(v*100)+'%'},
   detonator:{nm:'멸절 폭발',  type:'critDmg',  per:2,    every:25, fmt:v=>'치명타 피해 +'+Math.round(v*100)+'%'},
   apex:     {nm:'정점의 빛',  type:'allDmg',   per:0.65, every:25, fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
+  omega:    {nm:'종언',        type:'allDmg',   per:5.00, every:1,  fmt:v=>'모든 피해 +'+Math.round(v*100)+'%'},
 };
 function perkSteps(have,every){ return have>0?1+Math.floor((have-1)/every):0; }
 
 // ── 도전과제: 달성 시 정수 지급(영구) ──
+// 봉인된 동료 — 환생 횟수와 최고 기록을 둘 다 충족해야 풀린다
+function legendCount(){ let n=0; if(S.equip)for(const sl of EQUIP_SLOTS){ const e=S.equip[sl.id]; if(e&&e.lv>0&&(e.rar||0)>=4)n++; } return n; }
+function ownedHeroTypes(h){ let n=0; for(const x of HEROES){ if(x.id===h.id)continue; if((S.heroes[x.id]||0)>0)n++; } return n; }
+function sealInfo(h){
+  if(!h.seal)return null;
+  const q=h.seal;
+  const p=S.prestiges||0, st=S.bestStage||S.maxStage||1;
+  const r={ p, st, needP:Math.max(0,q.p-p), needS:Math.max(0,q.st-st), reqP:q.p, reqS:q.st, extra:[] };
+  if(q.relics==='all'){ const c=relicCount(S); r.extra.push({nm:'📜 유물 수집', cur:c, req:RELICS.length}); }
+  if(q.legend){ const c=legendCount(); r.extra.push({nm:'🌟 전설 장비', cur:c, req:q.legend}); }
+  if(q.heroes==='all'){ const c=ownedHeroTypes(h); r.extra.push({nm:'🛡️ 다른 동료 전원', cur:c, req:HEROES.length-1}); }
+  r.sealed = r.needP>0 || r.needS>0 || r.extra.some(e=>e.cur<e.req);
+  return r;
+}
+function isSealed(h){ const i=sealInfo(h); return !!(i&&i.sealed); }
+function sealText(i){
+  const part=(nm,cur,req)=>`${nm} <b style="color:${cur<req?'#ff9f6b':'#5ad17a'}">${fmt(cur)}/${fmt(req)}</b>`;
+  const out=[part('환생',i.p,i.reqP), part('최고 스테이지',i.st,i.reqS)];
+  i.extra.forEach(e=>out.push(part(e.nm,e.cur,e.req)));
+  return out.join(' · ');
+}
+// 종결 동료의 봉인이 풀리는 순간은 한 번 크게 알린다
+function checkOmegaUnlock(){
+  if((S.prestiges||0)<60||S.omegaSeen)return;      // 가장 싸게 걸러낸다
+  const h=HEROES.find(x=>x.id==='omega'); if(!h||isSealed(h))return;
+  S.omegaSeen=true; save();
+  openModal('🌌 봉인 해제 — 종언의 관측자',
+    `모든 기록을 끝까지 밀어붙인 자에게만<br>그가 눈길을 줍니다.<br><br>`+
+    `<span class="big">🌌 종언의 관측자</span><br>`+
+    `개당 ${fmt(h.dps)} DPS · ✨ <b>종언</b>: 1마리당 모든 피해 +500%`,
+    [{t:'동료 탭으로',cls:'ready',fn:()=>{ closeModal();
+      const t=document.querySelector('.tab[data-tab="hero"]'); if(t)t.click(); }}]);
+}
+function nextSealedHero(){
+  for(const h of HEROES) if(isSealed(h)) return h;
+  return null;
+}
 function heroTypes(s){ let n=0; for(const h of HEROES) if((s.heroes[h.id]||0)>0)n++; return n; }
 const ACHIEVEMENTS=[
   {id:'s10', nm:'첫 보스 격파',  desc:'스테이지 10 도달',   gem:1,  chk:s=>s.bestStage>=10},
@@ -779,19 +840,31 @@ function defaultState(){
     autoProgress:true, killsThisStage:0, lastSeen:Date.now(),
     totalKills:0, prestiges:0, bestStage:1,
     achClaimed:{}, bossCleared:{}, exped:{}, expedDone:0, lastDaily:0, rouletteSpins:0,
-    endingSeen:false, tutorialDone:false,
+    endingSeen:false, tutorialDone:false, omegaSeen:false,
   };
 }
 const FINAL_STAGE=500;
 
 // ── 숫자 포맷 ──
-const SUF=['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No','Dc','Ud','Dd',
-  'Td','Qad','Qid','Sxd','Spd','Ocd','Nod','Vg','Uvg','Dvg','Tvg','Qavg','Qivg','Sxvg','Spvg','Ocvg','Novg',
-  'Tg','Utg','Dtg','Ttg','Qatg','Qitg','Sxtg','Sptg','Octg','Notg','Qag'];
+// ── 숫자 단위 ──
+// 1000진법 접미사를 조합해서 만든다: K M B T Qa … Dc … Vg … Nog … Ce(1e303)
+const SUF_ONES=['','U','D','T','Qa','Qi','Sx','Sp','Oc','No'];
+const SUF_TENS=['','Dc','Vg','Tg','Qag','Qig','Sxg','Spg','Ocg','Nog'];
+const SUF=(()=>{
+  const a=['','K','M','B','T','Qa','Qi','Sx','Sp','Oc','No'];   // 1 ~ 1e33 이전
+  for(let t=1;t<SUF_TENS.length;t++)
+    for(let o=0;o<SUF_ONES.length;o++) a.push(SUF_ONES[o]+SUF_TENS[t]);
+  a.push('Ce');                                                  // 1e303
+  return a;
+})();
 function fmt(n){
+  if(!isFinite(n))return '∞';
   if(n<1000)return (Math.floor(n*10)/10).toString().replace(/\.0$/,'');
-  let t=0; while(n>=1000&&t<SUF.length-1){n/=1000;t++;}
-  return n.toFixed(n<10?2:n<100?1:0)+SUF[t];
+  let v=n,t=0;
+  // 999.9995 기준 — 부동소수점 오차로 1e33이 '1000No'로 보이는 것을 막는다
+  while(v>=999.9995&&t<SUF.length-1){v/=1000;t++;}
+  if(v>=999.9995)return n.toExponential(2).replace('e+','e');        // 접미사 범위를 넘으면 지수 표기
+  return v.toFixed(v<10?2:v<100?1:0)+SUF[t];
 }
 function fmtTime(s){
   s=Math.floor(s); const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;
@@ -822,7 +895,9 @@ function equipFx(){
   const fx={click:1,allDmg:1,gold:1,dps:1,crit:0,critDmg:0,bossDmg:1};
   if(S.equip)for(const sl of EQUIP_SLOTS){
     const e=S.equip[sl.id]; if(!e||!e.lv||e.lv<=0)continue;
-    const v=sl.per*e.lv*RARITIES[e.rar||0].mult;
+    const cs=e.cur?curseById(e.cur):null;
+    const v=sl.per*e.lv*RARITIES[e.rar||0].mult*(cs?CURSE_BOOST:1);
+    if(cs)cs.ap(fx);   // 저주 대가는 전체 능치에 적용
     switch(sl.stat){
       case 'click':   fx.click*=1+v;  break;
       case 'allDmg':  fx.allDmg*=1+v; break;
@@ -835,7 +910,7 @@ function equipFx(){
   }
   return fx;
 }
-function equipStatVal(sl){ const e=S.equip&&S.equip[sl.id]; if(!e||!e.lv)return 0; return sl.per*e.lv*RARITIES[e.rar||0].mult; }
+function equipStatVal(sl){ const e=S.equip&&S.equip[sl.id]; if(!e||!e.lv)return 0; return sl.per*e.lv*RARITIES[e.rar||0].mult*(e.cur?CURSE_BOOST:1); }
 // ── 연구소 효과(완료된 연구의 영구 보너스 합산) ──
 function researchFx(){
   const fx={gold:1,dps:1,click:1,allDmg:1,crit:0,offline:0,gem:0};
@@ -960,7 +1035,14 @@ function killsNeeded(st){return isBossStage(st)?1:4;} // 일반 스테이지는 
 function prestigeReqStage(){ return 12+4*(S.prestiges||0); }
 function gemsFromPrestige(){
   if(S.maxStage<prestigeReqStage())return 0;
-  return Math.floor(Math.pow(S.maxStage/10,1.7));
+  return gemsAtStage(S.maxStage);
+}
+function gemsAtStage(st){ return Math.floor(Math.pow(st/10,1.7)); }
+// 보상이 1 늘어나려면 어느 스테이지까지 더 가야 하는지
+function nextGemStage(){
+  const now=gemsAtStage(S.maxStage);
+  for(let st=S.maxStage+1;st<=S.maxStage+200;st++) if(gemsAtStage(st)>now)return {stage:st,gems:gemsAtStage(st)};
+  return null;
 }
 
 // ── 몬스터 스폰 ──
@@ -1300,7 +1382,7 @@ setInterval(tick,100);
 
 // ── 구매 수량 모드 ──
 let buyMode=1;
-const BUY_MODES=[1,10,100,'max'];
+const BUY_MODES=[1,10,25,100,1000,'max'];
 $('buyMaxBtn').onclick=()=>{
   buyMode=BUY_MODES[(BUY_MODES.indexOf(buyMode)+1)%BUY_MODES.length];
   $('buyMaxBtn').textContent='구매: '+(buyMode==='max'?'MAX':'x'+buyMode);
@@ -1320,6 +1402,24 @@ function resolveQty(base,mult,have,currency){
   if(buyMode!=='max')return {n:buyMode,sum:costFor(base,mult,have,buyMode)};
   const r=maxAfford(base,mult,have,currency);
   return r.n<1?{n:1,sum:costFor(base,mult,have,1)}:r;
+}
+// 정수 상점은 레벨마다 올림(ceil) 비용이라 따로 계산한다
+function gemCostAt(base,mult,lv){ return Math.ceil(base*Math.pow(mult,lv)); }
+function resolveQtyGem(base,mult,have,gems){
+  if(buyMode!=='max'){
+    let sum=0; for(let i=0;i<buyMode;i++) sum+=gemCostAt(base,mult,have+i);
+    return {n:buyMode,sum};
+  }
+  let n=0,sum=0;
+  while(n<100000){ const c=gemCostAt(base,mult,have+n); if(sum+c>gems)break; sum+=c; n++; }
+  return n<1?{n:1,sum:gemCostAt(base,mult,have)}:{n,sum};
+}
+// 보유 재화로 지금 몇 개까지 살 수 있는지(고정 수량 모드 안내용)
+function affordHint(n,sum,have,cur,costAt){
+  if(cur>=sum)return '';
+  let k=0,acc=0;
+  while(k<n){ const c=costAt(have+k); if(acc+c>cur)break; acc+=c; k++; }
+  return `<span style="opacity:.75">지금 최대 ${k}개 가능</span>`;
 }
 
 // ── 탐험 ──
@@ -1408,8 +1508,10 @@ function craftEquip(sl){
   const cur=S.equip[sl.id]; if(cur&&cur.lv>0)return;
   const cost=forgeCraftCost(); if(S.gold<cost)return;
   S.gold-=cost; const rar=rollRarity();
-  S.equip[sl.id]={lv:1,rar};
-  floatNum('🔨 '+RARITIES[rar].nm+' '+sl.nm+' 제작!',true,RARITIES[rar].col);
+  const cid=Math.random()<CURSE_CHANCE?rollCurse():null;
+  S.equip[sl.id]=cid?{lv:1,rar,cur:cid}:{lv:1,rar};
+  if(cid)floatNum('🕸️ 저주받은 '+sl.nm+' — '+curseById(cid).nm+'!',true,'#ff5a78');
+  else floatNum('🔨 '+RARITIES[rar].nm+' '+sl.nm+' 제작!',true,RARITIES[rar].col);
   updateTop();renderShop();flashSave();
 }
 function upgradeEquip(sl){
@@ -1418,12 +1520,23 @@ function upgradeEquip(sl){
   S.gold-=sum; e.lv+=n;
   updateTop();renderShop();flashSave();
 }
+function purifyEquip(sl){
+  const e=S.equip&&S.equip[sl.id]; if(!e||!e.cur)return;
+  if(S.gems<PURIFY_COST)return;
+  S.gems-=PURIFY_COST; const c=curseById(e.cur); delete e.cur;
+  floatNum('✨ '+c.nm+' 정화 완료',true,'#5ad17a');
+  updateTop();renderShop();flashSave();
+}
 function reforgeEquip(sl){
   const e=S.equip&&S.equip[sl.id]; if(!e||e.lv<=0)return;
   if(S.gems<REFORGE_COST)return;
   S.gems-=REFORGE_COST; const nr=rollRarity();
   if(nr>(e.rar||0)){ e.rar=nr; floatNum('✨ '+RARITIES[nr].nm+'(으)로 승급!',true,RARITIES[nr].col); }
   else floatNum('재련 실패 — 등급 유지',false,'#8b93ad');
+  // 재련은 저주를 다시 굴린다(새로 붙거나, 풀리거나)
+  if(Math.random()<CURSE_CHANCE){ const c=rollCurse();
+    if(e.cur!==c){ e.cur=c; floatNum('🕸️ '+curseById(c).nm+'이(가) 깃들었다',true,'#ff5a78'); }
+  }else if(e.cur){ delete e.cur; floatNum('✨ 저주가 풀렸다',true,'#5ad17a'); }
   updateTop();renderShop();flashSave();
 }
 
@@ -1531,21 +1644,36 @@ let activeTab='hero';
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   activeTab=t.dataset.tab;
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
-  $('buyMaxBtn').style.display=(activeTab==='hero'||activeTab==='up'||activeTab==='forge'||activeTab==='gacha')?'':'none';
+  $('buyMaxBtn').style.display=(activeTab==='hero'||activeTab==='up'||activeTab==='forge'||activeTab==='gacha'||activeTab==='gem')?'':'none';
   renderShop();
 });
 function renderShop(){
   const list=$('shopList'); list.innerHTML='';
   if(activeTab==='hero'){
+    const sh=nextSealedHero();
+    if(sh){   // 못 사는 것을 계속 보여주는 게 방치형의 동기부여다
+      const b=document.createElement('div');
+      b.style.cssText='margin:6px;padding:8px 10px;border:1px solid #5b4bb0;border-radius:8px;'+
+        'background:linear-gradient(90deg,rgba(122,92,255,.18),transparent);font-size:11px;line-height:1.7';
+      const si=sealInfo(sh);
+      b.innerHTML=`⛓️ <b style="color:#c9bcff">봉인된 동료</b> — ${sh.ico} <b>${sh.nm}</b><br>`+
+        `<span style="color:var(--dim)">${sealText(si)}</span><br>`+
+        `<span style="color:var(--dim);font-size:10px">두 조건을 모두 충족해야 봉인이 풀립니다`+
+        `${si.needP?` · 환생 ${si.needP}회 남음`:''}${si.needS?` · ${si.needS}스테이지 남음`:''}</span>`;
+      list.appendChild(b);
+    }
     HEROES.forEach((h,i)=>{
       const have=S.heroes[h.id]||0;
-      const locked=i>0 && (S.heroes[HEROES[i-1].id]||0)<1 && have===0;
+      const si=sealInfo(h), seal=si&&si.sealed;
+      const locked=seal || (i>0 && (S.heroes[HEROES[i-1].id]||0)<1 && have===0);
       const {n,sum}=resolveQty(h.cost,1.15,have,S.gold);
       const ok=!locked&&S.gold>=sum;
       const addDps=h.dps*n*Math.pow(1.25,S.upg.dmg)*gemAllMult();
       const p=HERO_PERKS[h.id];
       const steps=perkSteps(have,p.every), nextAt=steps*p.every+1;
-      const perkLvl = locked
+      const perkLvl = seal
+        ? `⛓️ <b>봉인</b> · ${sealText(si)}<br>💤 개당 ${fmt(h.dps)} DPS의 힘이 잠들어 있습니다`
+        : locked
         ? '🔒 이전 동료 필요'
         : (have<=0
             ? `보유 0 · 구매 시 +${fmt(addDps)} DPS<br>✨ <b>${p.nm}</b>: 첫 구매 발동 → ${p.fmt(p.per)}`
@@ -1553,7 +1681,7 @@ function renderShop(){
       list.appendChild(card({
         ico:h.ico, nm:h.nm, sub:`개당 ${fmt(h.dps)} DPS · ✨${p.nm}`,
         lvl:perkLvl,
-        cost:locked?'🔒':'💰 '+fmt(sum), costCls:ok?'ok':'no', locked,
+        cost:seal?'⛓️':(locked?'🔒':'💰 '+fmt(sum)), costCls:ok?'ok':'no', locked,
         onclick:()=>{ if(locked||S.gold<sum)return;
           const before=have; S.gold-=sum; S.heroes[h.id]=before+n;
           const s0=perkSteps(before,p.every), s1=perkSteps(before+n,p.every);
@@ -1601,16 +1729,28 @@ function renderShop(){
       const e=(S.equip&&S.equip[sl.id])||{lv:0,rar:0};
       if(e.lv>0){
         const rar=RARITIES[e.rar||0];
+        const cs=e.cur?curseById(e.cur):null;
         const {n,sum}=forgeUpInfo(sl); const okU=S.gold>=sum;
-        const cur=equipStatVal(sl), per=sl.per*rar.mult;
+        const cur=equipStatVal(sl), per=sl.per*rar.mult*(cs?CURSE_BOOST:1);
         list.appendChild(card({
-          ico:sl.ico,
-          nm:`<span style="color:${rar.col}">[${rar.nm}] ${sl.nm}</span> Lv.${e.lv}`,
-          sub:'현재 '+sl.fmt(cur),
+          ico:cs?'🕸️':sl.ico,
+          nm:`<span style="color:${rar.col}">[${rar.nm}] ${sl.nm}</span> Lv.${e.lv}`+
+             (cs?` <span style="color:#ff5a78">· ${cs.nm}</span>`:''),
+          sub:'현재 '+sl.fmt(cur)+(cs?`<br><span style="color:#ff5a78">${cs.ico} 효과 ×${CURSE_BOOST} 대신 ${cs.desc}</span>`:''),
           lvl:`강화 ×${n} → +${Math.round(per*n*100)}%p (도달 ${sl.fmt(cur+per*n)})`,
           cost:'💰 '+fmt(sum)+(n>1?' ·×'+n:''), costCls:okU?'ok':'no',
           onclick:()=>upgradeEquip(sl)
         }));
+        if(cs){
+          const okP=S.gems>=PURIFY_COST;
+          list.appendChild(card({
+            ico:'🕊️', nm:sl.nm+' 정화',
+            sub:`${cs.nm} 제거 — ${cs.desc} 가 사라집니다`,
+            lvl:`단, 효과 ×${CURSE_BOOST} 보너스도 함께 사라집니다 (${sl.fmt(cur)} → ${sl.fmt(cur/CURSE_BOOST)})`,
+            cost:'💎 '+PURIFY_COST, costCls:'gem '+(okP?'ok':'no'),
+            onclick:()=>purifyEquip(sl)
+          }));
+        }
         const okR=S.gems>=REFORGE_COST;
         list.appendChild(card({
           ico:'♻️', nm:sl.nm+' 재련',
@@ -1623,7 +1763,8 @@ function renderShop(){
         const cCost=forgeCraftCost(), okC=S.gold>=cCost;
         list.appendChild(card({
           ico:'❔', nm:sl.nm+' · 빈 슬롯',
-          sub:'제작하면 무작위 등급으로 획득 ('+sl.fmt(sl.per)+' / Lv)',
+          sub:'제작하면 무작위 등급으로 획득 ('+sl.fmt(sl.per)+' / Lv)'+
+              `<br><span style="color:#ff5a78">🕸️ ${Math.round(CURSE_CHANCE*100)}% 확률로 저주받음 — 효과 ×${CURSE_BOOST}, 대신 패널티</span>`,
           lvl:'기본 효과: '+sl.fmt(sl.per)+' · 등급이 높을수록 강력',
           cost:'🔨 '+fmt(cCost), costCls:okC?'ok':'no',
           onclick:()=>craftEquip(sl)
@@ -1702,12 +1843,13 @@ function renderShop(){
   }else if(activeTab==='gem'){
     GEMSHOP.forEach(g=>{
       const have=S.gem[g.key]||0;
-      const cost=Math.ceil(g.baseCost*Math.pow(g.mult,have));
-      const ok=S.gems>=cost;
+      const {n,sum}=resolveQtyGem(g.baseCost,g.mult,have,S.gems);
+      const ok=S.gems>=sum;
+      const hint=affordHint(n,sum,have,S.gems,lv=>gemCostAt(g.baseCost,g.mult,lv));
       list.appendChild(card({
-        ico:g.ico, nm:g.nm, sub:g.sub, lvl:`레벨 ${have}`,
-        cost:'💎 '+fmt(cost), costCls:'gem '+(ok?'ok':'no'),
-        onclick:()=>{ if(S.gems<cost)return; S.gems-=cost; S.gem[g.key]=have+1; updateTop();renderShop();flashSave(); }
+        ico:g.ico, nm:g.nm, sub:g.sub, lvl:`레벨 ${have}`+(n>1?` → ${have+n}`:'')+(hint?' · '+hint:''),
+        cost:'💎 '+fmt(sum)+(n>1?`<div style="font-size:10px;opacity:.7">×${n}</div>`:''), costCls:'gem '+(ok?'ok':'no'),
+        onclick:()=>{ if(S.gems<sum)return; S.gems-=sum; S.gem[g.key]=have+n; updateTop();renderShop();flashSave(); }
       }));
     });
     const info=document.createElement('div');
@@ -1736,6 +1878,36 @@ function renderShop(){
       `· 👑 보스 첫 처치 시 ${Math.round(RELIC_DROP_CHANCE*100)}% 확률로 드롭<br>`+
       `· 같은 유물을 모으면 레벨이 올라 효과가 강해집니다<br>`+
       `· 효과는 항상 적용되며 환생해도 사라지지 않아요`;
+    list.appendChild(info);
+  }else if(activeTab==='rank'){ // 🏆 랭킹
+    submitScore();
+    const arr=rankList(), me=rankName();
+    const medal=i=>i===0?'🥇':(i===1?'🥈':(i===2?'🥉':'#'+(i+1)));
+    if(!arr.length){
+      const em=document.createElement('div');
+      em.style.cssText='font-size:12px;color:var(--dim);text-align:center;padding:20px;line-height:1.8';
+      em.innerHTML='아직 기록이 없어요.<br>조금만 더 모험해 보세요!';
+      list.appendChild(em);
+    }
+    arr.forEach((e,i)=>{
+      const mine=e.name===me;
+      const el=card({
+        ico:medal(i),
+        nm:(mine?'⭐ ':'')+e.name+(e.guest?' <span style="opacity:.6;font-size:10px">(게스트)</span>':''),
+        sub:'⚔️ DPS '+fmt(e.dps||0)+' · 💀 환생 '+(e.prestiges||0),
+        lvl:'💰 최대 보유 '+fmt(e.gold||0),
+        cost:'스테이지 '+(e.stage||1), costCls:mine?'ok':'',
+        onclick:()=>{}
+      });
+      if(mine)el.style.outline='1px solid var(--gem)';
+      list.appendChild(el);
+    });
+    const info=document.createElement('div');
+    info.style.cssText='font-size:11px;color:var(--dim);text-align:center;padding:8px;line-height:1.7';
+    const mr=myRank();
+    info.innerHTML='🏆 <b>랭킹</b> · 내 순위 <b style="color:var(--gem)">'+(mr?mr+'위':'-')+'</b> / '+arr.length+'명<br>'+
+      '· 최고 스테이지 → 환생 횟수 → DPS 순으로 정렬됩니다<br>'+
+      '· 기록은 이 브라우저의 모든 계정끼리 비교됩니다';
     list.appendChild(info);
   }else{ // ach — 도전과제
     ACHIEVEMENTS.forEach(a=>{
@@ -1772,7 +1944,14 @@ function updateTop(){
   $('rGem').textContent=fmt(S.gems);
   $('rDps').textContent=fmt(totalDps());
   $('rClick').textContent=fmt(clickPower());
-  $('prestigeBtn').classList.toggle('ready',gemsFromPrestige()>0);
+  const pg=gemsFromPrestige();
+  checkOmegaUnlock();
+  $('prestigeBtn').classList.toggle('ready',pg>0);
+  // 환생 보상 미리보기 — 누르기 전에 얼마를 받는지 보이게
+  $('prestigeBtn').textContent = pg>0 ? `💀 환생 💎${fmt(pg)}` : `💀 환생 St.${prestigeReqStage()}`;
+  $('prestigeBtn').title = pg>0
+    ? `지금 환생하면 정수 ${fmt(pg)}개를 얻습니다`
+    : `최고 스테이지 ${prestigeReqStage()} 도달 시 환생 가능 (현재 ${S.maxStage})`;
   updateAchBadge();
   updateQuestBadge();
   updateResearchBadge();
@@ -1802,7 +1981,8 @@ $('prestigeBtn').onclick=()=>{
   const g=gemsFromPrestige();
   if(g<=0){ openModal('아직 일러요','최고 <b>스테이지 '+prestigeReqStage()+'</b>에 도달하면 환생할 수 있어요.<br>지금 최고 스테이지: '+S.maxStage,[{t:'확인',cls:'',fn:closeModal}]); return; }
   openModal('💀 환생하시겠습니까?',
-    `정수 <span class="big">💎 ${g}</span> 를 얻고,<br>골드·동료·강화가 초기화됩니다.<br>정수 상점의 영구 강화는 유지됩니다.`,
+    `정수 <span class="big">💎 ${g}</span> 를 얻고,<br>골드·동료·강화가 초기화됩니다.<br>정수 상점의 영구 강화는 유지됩니다.`+
+    (()=>{ const nx=nextGemStage(); return nx?`<br><br><span style="font-size:12px;color:var(--dim)">💡 스테이지 <b>${nx.stage}</b>까지 더 가면 💎 <b>${nx.gems}</b>개 (+${nx.gems-g})</span>`:''; })(),
     [{t:'취소',cls:'',fn:closeModal},{t:'환생!',cls:'ready',fn:()=>{doPrestige(g);closeModal();}}]);
 };
 function doPrestige(g){
@@ -1813,7 +1993,8 @@ function doPrestige(g){
     relics:S.relics||{},                       // 유물은 영구 보존(환생해도 유지)
     equip:S.equip||{},                          // 대장간 장비도 영구 보존
     research:S.research||{active:null,done:{}}, // 연구 결과(영구) 보존
-    exped:S.exped||{}, expedDone:S.expedDone||0, lastDaily:S.lastDaily||0 };
+    exped:S.exped||{}, expedDone:S.expedDone||0, lastDaily:S.lastDaily||0,
+    tutorialDone:!!S.tutorialDone, endingSeen:!!S.endingSeen, omegaSeen:!!S.omegaSeen };
   const startBonus=3*(keepGem.gStart||0);
   S=defaultState();
   Object.assign(S,keep);
@@ -1843,9 +2024,39 @@ function showEnding(){
     [{t:'계속 모험하기',cls:'',fn:closeModal}]);
 }
 
+// ── 랭킹(로컬) ──
+// 서버가 없기 때문에 이 브라우저의 계정들끼리 경쟁하는 기록판이다.
+function loadRanks(){
+  try{ const d=JSON.parse(localStorage.getItem(RANK_KEY)||'{}'); return (d&&typeof d==='object')?d:{}; }
+  catch(e){ return {}; }
+}
+function saveRanks(r){ try{localStorage.setItem(RANK_KEY,JSON.stringify(r));}catch(e){} }
+function rankName(){ return curUser||'ダ게스트'; }
+function rankScore(e){ return (e.stage||0)*1e6 + (e.prestiges||0)*1e3 + Math.min(999,Math.log10((e.dps||0)+1)*40); }
+function submitScore(){
+  if(!gameReady)return;
+  const r=loadRanks(), nm=rankName(), prev=r[nm]||{};
+  const cur={name:nm, guest:!curUser, stage:Math.max(S.maxStage||1,prev.stage||0),
+             prestiges:Math.max(S.prestiges||0,prev.prestiges||0),
+             dps:Math.max(Math.round(totalDps()),prev.dps||0),
+             gold:Math.max(Math.round(S.gold||0),prev.gold||0), at:Date.now()};
+  r[nm]=cur; saveRanks(r);
+}
+function rankList(){
+  const r=loadRanks(), arr=[];
+  for(const k in r){ const e=r[k]||{}; e.name=e.name||k; arr.push(e); }
+  arr.sort((a,b)=>rankScore(b)-rankScore(a));
+  return arr;
+}
+function myRank(){
+  const arr=rankList(), nm=rankName();
+  for(let i=0;i<arr.length;i++) if(arr[i].name===nm) return i+1;
+  return 0;
+}
+
 // ── 저장 / 불러오기 ──
 let saveFlash=0;
-function save(){ S.lastSeen=Date.now(); try{localStorage.setItem(SAVE_KEY,JSON.stringify(S));}catch(e){} }
+function save(){ S.lastSeen=Date.now(); try{localStorage.setItem(SAVE_KEY,JSON.stringify(S));}catch(e){} submitScore(); }
 function flashSave(){save();$('saveStat').textContent='💾 저장됨';saveFlash=Date.now();}
 setInterval(()=>{ if(!gameReady)return; save(); if(Date.now()-saveFlash>1500)$('saveStat').textContent='💾 자동 저장 중 · 최고 스테이지 '+S.maxStage;},3000);
 window.addEventListener('beforeunload',()=>{ if(gameReady)save(); });
@@ -1878,15 +2089,22 @@ function load(){
 // ── 오프라인 보상 + 일일 출석 보상 ──
 function dayKey(){ const n=new Date(); return n.getFullYear()+'-'+(n.getMonth()+1)+'-'+n.getDate(); }
 function welcomeBack(){
-  const lines=[];
+  const ev=[];   // 오프라인 리플레이 — 숫자 하나 대신 자리 비운 동안의 일을 한 줄씩 재생한다
   // 1) 오프라인 골드(최대 8시간)
   const dt=Math.min((Date.now()-(S.lastSeen||Date.now()))/1000, OFFLINE_CAP_H*3600);
   const d=totalDps();
   if(dt>=60 && d>0){
     const gph=goldReward(S.stage,false)/mobMaxHp(S.stage,false);
     const earn=Math.floor(d*dt*gph*offlineEff()); // 효율(기본 60% + 강화/정수/유물)
-    if(earn>0){ S.gold+=earn;
-      lines.push(`자리를 비운 ${fmtTime(dt)} 동안<br>동료들이 골드 <span class="big">💰 ${fmt(earn)}</span> 를 벌었어요!`); }
+    if(earn>0){
+      const kills=Math.floor(d*dt*offlineEff()/Math.max(1,mobMaxHp(S.stage,false)));
+      S.gold+=earn;
+      ev.push(`🌙 자리를 비운 시간 <b>${fmtTime(dt)}</b>`);
+      ev.push(`⚔️ 동료들이 스테이지 <b>${S.stage}</b>을 지켰습니다`);
+      if(kills>0) ev.push(`💀 몬스터 <b>${fmt(kills)}마리</b> 처치`);
+      ev.push(`⚙️ 오프라인 효율 <b>${Math.round(offlineEff()*100)}%</b> 적용`);
+      ev.push(`💰 골드 <span class="big">${fmt(earn)}</span> 획득!`);
+    }
   }
   // 2) 일일 출석 보상(하루 한 번)
   const today=dayKey();
@@ -1894,12 +2112,28 @@ function welcomeBack(){
     S.lastDaily=today;
     const gems=3+Math.floor((S.bestStage||1)/20);
     S.gems+=gems;
-    lines.push(`📅 오늘의 <b>출석 보상</b>: 정수 <span class="big">💎 ${gems}</span> 획득!`);
+    ev.push(`📅 오늘의 <b>출석 보상</b> · 정수 <span class="big">💎 ${gems}</span>`);
   }
-  if(lines.length){
-    openModal('🌙 다시 오셨군요!', lines.join('<br><br>'), [{t:'받기',cls:'ready',fn:closeModal}]);
-    updateTop(); save();
-  }
+  if(!ev.length)return;
+  const rows=ev.map((t,k)=>`<div class="rp" data-i="${k}" style="opacity:0;transform:translateY(6px);`+
+    `transition:opacity .25s,transform .25s;padding:5px 0;line-height:1.6">${t}</div>`).join('');
+  openModal('🌙 다시 오셨군요!',
+    `<div id="rpLog" style="text-align:left;font-size:13px">${rows}</div>`,
+    [{t:'받기',cls:'ready',fn:closeModal}]);
+  // 한 줄씩 떠오르게 — 모달을 닫으면 자동으로 멈춘다
+  let k=0;
+  const show=()=>{
+    const el=document.querySelector(`#rpLog .rp[data-i="${k}"]`);
+    if(!el){ clearInterval(tm); return; }
+    el.style.opacity='1'; el.style.transform='none'; k++;
+    if(k>=ev.length)clearInterval(tm);
+  };
+  const tm=setInterval(show,420); show();
+  // 로그를 누르면 나머지를 한 번에 보여준다
+  const log=$('rpLog');
+  if(log)log.onclick=()=>{ clearInterval(tm);
+    log.querySelectorAll('.rp').forEach(el=>{ el.style.opacity='1'; el.style.transform='none'; }); };
+  updateTop(); save();
 }
 
 // ── 튜토리얼 ──
@@ -1987,6 +2221,17 @@ function tutShow(i){
   $('tutNext').textContent=(i===TUT_STEPS.length-1)?'시작하기':'다음';
   requestAnimationFrame(tutPlace);
 }
+// 튜토리얼은 '이 기기에서 처음 시작한 사람'에게만 자동으로 띄운다.
+// 계정별 S.tutorialDone 외에 브라우저 공통 플래그도 보기 때문에,
+// 새 계정을 만들거나 게스트로 들어와도 다시 뜨지 않는다. (❓ 도움말로는 언제든 다시 볼 수 있음)
+function tutSeenOnDevice(){ try{ return localStorage.getItem(TUT_SEEN_KEY)==='1'; }catch(e){ return false; } }
+function markTutSeen(){ try{ localStorage.setItem(TUT_SEEN_KEY,'1'); }catch(e){} }
+function shouldAutoTutorial(){
+  if(S.tutorialDone||tutSeenOnDevice())return false;
+  // 튜토리얼 기능 이전의 진행 중인 세이브도 처음이 아니다
+  if((S.maxStage||1)>1||(S.prestiges||0)>0||(S.totalKills||0)>5){ markTutSeen(); S.tutorialDone=true; return false; }
+  return true;
+}
 function tutStart(){
   closeModal();
   $('tutBlock').classList.add('show');
@@ -1999,7 +2244,7 @@ function tutEnd(skipped){
   $('tutRing').style.display='none';
   $('tutBox').style.display='none';
   tutIdx=-1;
-  S.tutorialDone=true; save();
+  S.tutorialDone=true; markTutSeen(); save();
   if(skipped) floatNum('튜토리얼 건너뜀 · ❓ 도움말에서 다시 볼 수 있어요',false,'#8b93ad');
 }
 $('tutNext').onclick=()=>{ if(tutIdx>=TUT_STEPS.length-1)tutEnd(false); else tutShow(tutIdx+1); };
@@ -2044,6 +2289,65 @@ function openHelp(){
 }
 $('tutBtn').onclick=openHelp;
 addEventListener('resize',()=>{ if(tutIdx>=0)tutPlace(); });
+
+// ── 개발자 도구 ──
+// 비밀번호는 해시로만 두지만, 모든 게 브라우저에서 돌아가는 단일 HTML이라
+// 마음먹고 파면 우회할 수 있다. 남이 쉬우지 않게 막는 용도지 보안이 아니다.
+const DEV_SALT='gqc';
+const DEV_HASH='15ksb8y135xead159g4a21oovubn';   // 기본 비밀번호: gqcdev
+let devUnlocked=false;                            // 탭을 닫을 때까지만 유지
+function devAsk(){
+  openModal('🛠️ 개발자 도구',
+    '비밀번호를 입력하세요.<br>'+
+    '<input id="devPw" type="password" maxlength="32" autocomplete="off" '+
+    'style="margin-top:10px;width:100%;padding:9px;border-radius:8px;border:1px solid var(--line);'+
+    'background:#11131c;color:var(--txt);font-size:14px;text-align:center">'+
+    '<div id="devMsg" style="margin-top:8px;font-size:12px;color:#ff5a78;min-height:16px"></div>',
+    [{t:'취소',cls:'',fn:closeModal},{t:'확인',cls:'ready',fn:devTry}]);
+  const inp=$('devPw');
+  if(inp){ inp.focus(); inp.onkeydown=e=>{ if(e.key==='Enter')devTry(); }; }
+}
+function devTry(){
+  const inp=$('devPw'); if(!inp)return;
+  if(hashPw(inp.value,DEV_SALT)!==DEV_HASH){
+    $('devMsg').textContent='비밀번호가 틀렸습니다.';
+    inp.value=''; inp.focus(); return;
+  }
+  devUnlocked=true; devPanel();
+}
+function devDo(fn){ fn(); spawnMob(); updateTop(); updateStageLabel(); renderShop(); save(); devPanel(); }
+function devPanel(){
+  const acts=[
+    ['💰 골드 ×1000',      ()=>{ S.gold=Math.max(S.gold,1)*1000; }],
+    ['💎 정수 +1000',       ()=>{ S.gems+=1000; }],
+    ['⏩ 스테이지 +50',   ()=>{ S.frontier=S.maxStage=S.stage=(S.maxStage||1)+50;
+                                 S.bestStage=Math.max(S.bestStage||1,S.maxStage); }],
+    ['💀 환생 횟수 +10',  ()=>{ S.prestiges=(S.prestiges||0)+10; }],
+    ['🕸️ 장비 전부 저주',()=>{ S.equip=S.equip||{};
+        EQUIP_SLOTS.forEach(sl=>{ const e=S.equip[sl.id];
+          if(!e||!e.lv)S.equip[sl.id]={lv:1,rar:0};
+          S.equip[sl.id].cur=rollCurse(); }); }],
+    ['✨ 저주 전부 해제',   ()=>{ if(S.equip)EQUIP_SLOTS.forEach(sl=>{ const e=S.equip[sl.id]; if(e)delete e.cur; }); }],
+    ['🌟 전설 장비 풀세트',()=>{ S.equip=S.equip||{};
+        EQUIP_SLOTS.forEach(sl=>{ S.equip[sl.id]={lv:Math.max(20,(S.equip[sl.id]||{}).lv||0),rar:4}; }); }],
+    ['📜 유물 전부 획득',  ()=>{ S.relics=S.relics||{}; RELICS.forEach(r=>{ S.relics[r.id]=Math.max(1,S.relics[r.id]||0); }); }],
+    ['🛡️ 동료 전원 1마리', ()=>{ HEROES.forEach(h=>{ S.heroes[h.id]=Math.max(1,S.heroes[h.id]||0); }); }],
+    ['🔓 튜토리얼 다시 보기',()=>{ S.tutorialDone=false; try{localStorage.removeItem(TUT_SEEN_KEY);}catch(e){} }],
+  ];
+  const body=`<div style="font-size:12px;color:var(--dim);line-height:1.7;text-align:left">`+
+    `계정 <b>${curUser||'게스트'}</b> · 스테이지 ${S.maxStage} · 환생 ${S.prestiges||0}회<br>`+
+    `야만적인 기능입니다 — 누르면 즉시 적용되고 저장됩니다.</div>`+
+    `<div id="devActs" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px"></div>`;
+  openModal('🛠️ 개발자 도구', body, [{t:'닫기',cls:'ready',fn:closeModal}]);
+  const box=$('devActs');
+  acts.forEach(([label,fn])=>{
+    const b=document.createElement('button');
+    b.className='btn'; b.textContent=label; b.style.cssText='font-size:11px;padding:8px 4px';
+    b.onclick=()=>devDo(fn);
+    box.appendChild(b);
+  });
+}
+$('devBtn').onclick=()=>{ if(!gameReady)return; devUnlocked?devPanel():devAsk(); };
 
 // ── 계정(로컬) ──
 // 서버가 없는 단일 HTML 게임이라 계정 정보는 이 브라우저의 localStorage에만 저장된다.
@@ -2132,6 +2436,7 @@ function logout(){
   tutEnd(false);
   closeModal();
   gameReady=false;
+  devUnlocked=false;
   try{ localStorage.removeItem(SESSION_KEY); }catch(e){}
   $('authId').value=curUser||''; curUser=null;
   showAuth();
@@ -2161,7 +2466,7 @@ function startGame(){
   $('saveStat').textContent='💾 자동 저장 중 · 최고 스테이지 '+S.maxStage;
 
   // 첫 플레이라면 튜토리얼 자동 실행(출석/오프라인 보상 모달이 닫힌 뒤에)
-  if(!S.tutorialDone){
+  if(shouldAutoTutorial()){
     const waitModal=setInterval(()=>{
       if(!gameReady){ clearInterval(waitModal); return; }
       if($('modalBg').classList.contains('show'))return;
