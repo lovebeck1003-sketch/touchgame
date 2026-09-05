@@ -597,7 +597,7 @@ const SKILLS=[
 
 // ── 탐험: 동료를 파견하면 실제 시간이 흐른 뒤 보상을 수령(오프라인에도 진행) ──
 //  reqStage: 해금에 필요한 최고 스테이지 / dur: 소요 시간(초)
-//  goldMul: maxStage 기준 1킬 골드 × 배수 / gem: [최소, crew:12, crew:8,최대] / gemChance / relicChance
+//  goldMul: maxStage 기준 1킬 골드 × 배수 / gem: [최소,최대] / gemChance / relicChance
 //  crew: 파견에 필요한 동료 수. 파견된 동료는 원정이 끝날 때까지 DPS에서 빠진다.
 const EXPEDITIONS=[
   {id:'scout', ico:'🧭', nm:'근교 정찰',   reqStage:1, crew:1,  dur:60,   goldMul:35,   gem:[0,0], gemChance:0,    relicChance:0,
@@ -606,9 +606,9 @@ const EXPEDITIONS=[
    desc:'던전을 토벌해 두둑한 골드와 가끔 정수를 얻습니다.'},
   {id:'abyss', ico:'🕯️', nm:'비경 탐사',   reqStage:30, crew:5, dur:1200, goldMul:1100, gem:[1,2], gemChance:0.75, relicChance:0.12,
    desc:'깊은 비경에서 정수와 드물게 유물을 발견합니다.'},
-  {id:'demon', ico:'🔥', nm:'마계 원정',   reqStage:60, dur:3600, goldMul:4200, gem:[2,3], gemChance:1,    relicChance:0.4,
+  {id:'demon', ico:'🔥', nm:'마계 원정',   reqStage:60, crew:8, dur:3600, goldMul:4200, gem:[2,3], gemChance:1,    relicChance:0.4,
    desc:'마계로 떠나는 대원정. 막대한 보상과 높은 유물 확률.'},
-  {id:'cosmos',ico:'🌠', nm:'천공 항해',   reqStage:120,dur:7200, goldMul:11000,gem:[3,5], gemChance:1,    relicChance:0.6,
+  {id:'cosmos',ico:'🌠', nm:'천공 항해',   reqStage:120, crew:12,dur:7200, goldMul:11000,gem:[3,5], gemChance:1,    relicChance:0.6,
    desc:'별바다를 가르는 장기 원정. 최고의 보상이 기다립니다.'},
 ];
 
