@@ -107,8 +107,8 @@
   @keyframes chestBob{50%{transform:translateY(-8px) rotate(4deg)}}
 
   /* ── 액티브 스킬 바 ── */
-  #skillBar{display:flex;gap:6px;margin-top:10px}
-  .skillBtn{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+  #skillBar{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .skillBtn{flex:1 1 calc(25% - 6px);min-width:62px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;
     padding:6px 4px;cursor:pointer;color:var(--dim);text-align:center;transition:.1s}
   .skillBtn .si{font-size:22px;line-height:1}
   .skillBtn .sn{font-size:10px;font-weight:700;margin-top:2px}
@@ -118,6 +118,7 @@
   .skillBtn.ready:hover{border-color:var(--gold)}
   .skillBtn.active{border-color:var(--gold);background:rgba(255,206,84,.12);color:var(--gold)}
   .skillBtn.active .sc{color:var(--gold)}
+  .skillBtn.locked{opacity:.42;cursor:not-allowed}
   .skillBtn:active{transform:scale(.95)}
 
   /* ── 상점 ── */
@@ -155,6 +156,9 @@
   @keyframes pulse{50%{box-shadow:0 0 26px rgba(140,90,255,.85)}}
 
   /* ── 모달 ── */
+  .expPick{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;margin-bottom:5px;cursor:pointer;font-size:13px;transition:.1s}
+  .expPick:hover{border-color:var(--gold);background:rgba(255,206,84,.10)}
   #modalBg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;
     justify-content:center;z-index:50;padding:20px}
   #modalBg.show{display:flex}
@@ -578,21 +582,29 @@ const RESEARCH=[
 ];
 
 // ── 액티브 스킬: 쿨다운 후 재사용 ──
+//  dur: 지속 시간(초, 0이면 즉시 발동형) / cd: 재사용 대기(초)
+//  req: 해금 조건(최고 스테이지). 없으면 처음부터 사용 가능.
 const SKILLS=[
-  {id:'berserk',ico:'⚡', nm:'광폭화',    dur:10, cd:60, desc:'10초간 모든 피해 ×3'},
-  {id:'gold',   ico:'💰', nm:'황금시간',  dur:15, cd:90, desc:'15초간 골드 ×3'},
-  {id:'smite',  ico:'💥', nm:'필살의 일격',dur:0,  cd:45, desc:'적에게 즉시 큰 피해'},
+  {id:'berserk',ico:'⚡', nm:'광폭화',    dur:10, cd:60,  desc:'10초간 모든 피해 ×3'},
+  {id:'gold',   ico:'💰', nm:'황금시간',  dur:15, cd:90,  desc:'15초간 골드 ×3'},
+  {id:'smite',  ico:'💥', nm:'필살의 일격',dur:0,  cd:45,  desc:'적에게 즉시 큰 피해'},
+  {id:'combo',  ico:'🔥', nm:'연격 각성',  dur:0,  cd:75,  req:15,  desc:'콤보를 즉시 최대치로'},
+  {id:'guard',  ico:'🛡️', nm:'결전의 각오', dur:0,  cd:100, req:25,  desc:'보스 도주까지 +15초'},
+  {id:'fortune',ico:'💠', nm:'정수의 축복', dur:20, cd:120, req:40,  desc:'20초간 정수 드롭 +50%'},
+  {id:'purge',  ico:'✨', nm:'정화의 빛',   dur:0,  cd:180, req:60,  desc:'저주받은 장비 1개를 무료로 정화'},
+  {id:'recall', ico:'📯', nm:'귀환 나팔',   dur:0,  cd:600, req:80,  desc:'진행 중인 원정 1개를 즉시 완료'},
 ];
 
 // ── 탐험: 동료를 파견하면 실제 시간이 흐른 뒤 보상을 수령(오프라인에도 진행) ──
 //  reqStage: 해금에 필요한 최고 스테이지 / dur: 소요 시간(초)
-//  goldMul: maxStage 기준 1킬 골드 × 배수 / gem: [최소,최대] / gemChance / relicChance
+//  goldMul: maxStage 기준 1킬 골드 × 배수 / gem: [최소, crew:12, crew:8,최대] / gemChance / relicChance
+//  crew: 파견에 필요한 동료 수. 파견된 동료는 원정이 끝날 때까지 DPS에서 빠진다.
 const EXPEDITIONS=[
-  {id:'scout', ico:'🧭', nm:'근교 정찰',   reqStage:1,  dur:60,   goldMul:35,   gem:[0,0], gemChance:0,    relicChance:0,
+  {id:'scout', ico:'🧭', nm:'근교 정찰',   reqStage:1, crew:1,  dur:60,   goldMul:35,   gem:[0,0], gemChance:0,    relicChance:0,
    desc:'가볍게 주변을 둘러보고 골드를 챙겨옵니다.'},
-  {id:'dungeon',ico:'🏰', nm:'던전 토벌',   reqStage:10, dur:300,  goldMul:220,  gem:[1,1], gemChance:0.3,  relicChance:0,
+  {id:'dungeon',ico:'🏰', nm:'던전 토벌',   reqStage:10, crew:3, dur:300,  goldMul:220,  gem:[1,1], gemChance:0.3,  relicChance:0,
    desc:'던전을 토벌해 두둑한 골드와 가끔 정수를 얻습니다.'},
-  {id:'abyss', ico:'🕯️', nm:'비경 탐사',   reqStage:30, dur:1200, goldMul:1100, gem:[1,2], gemChance:0.75, relicChance:0.12,
+  {id:'abyss', ico:'🕯️', nm:'비경 탐사',   reqStage:30, crew:5, dur:1200, goldMul:1100, gem:[1,2], gemChance:0.75, relicChance:0.12,
    desc:'깊은 비경에서 정수와 드물게 유물을 발견합니다.'},
   {id:'demon', ico:'🔥', nm:'마계 원정',   reqStage:60, dur:3600, goldMul:4200, gem:[2,3], gemChance:1,    relicChance:0.4,
    desc:'마계로 떠나는 대원정. 막대한 보상과 높은 유물 확률.'},
@@ -948,6 +960,7 @@ function pureGold(st){ return 6*Math.pow(1.24,Math.max(0,st-1)); }
 // 액티브 스킬 버프 배율
 function skillDmgMult(){ return (skillState.berserk&&skillState.berserk.buff>0)?3:1; }
 function skillGoldMult(){ return (skillState.gold&&skillState.gold.buff>0)?3:1; }
+function skillGemAdd(){ return (skillState.fortune&&skillState.fortune.buff>0)?0.50:0; }   // 정수의 축복
 // 이벤트 버프(동시에 최대 1개 활성)
 function evBuff(type){ return (curEvent&&!curEvent.pending&&curEvent.def.type===type)?curEvent.def.value:null; }
 function eventDmgMult(){ return evBuff('dmg')||1; }
@@ -964,7 +977,7 @@ function clickPower(){
 }
 function totalDps(){
   let d=0;
-  for(const h of HEROES) d+=(S.heroes[h.id]||0)*h.dps;
+  for(const h of HEROES) d+=heroAvail(h.id)*h.dps;   // 원정에 파견된 동료는 빠진다
   d*=Math.pow(1.25,S.upg.dmg);   // 동료 훈련
   d*=gemAllMult();
   d*=heroFx().dps;               // 동료 특수 능력
@@ -986,7 +999,7 @@ function bossTimeBonus(){ return heroFx().bossTime+relicFx().bossTime; }
 // 오프라인 효율 (기본 0.6 + 강화/정수/유물)
 function offlineEff(){ return Math.min(2.0, 0.6+0.10*(S.upg.offline||0)+0.15*(S.gem.gOffline||0)+relicFx().offline+researchFx().offline); }
 // 정수 드롭 추가 확률 (동료+유물)
-function gemFindChance(){ return Math.min(0.95, heroFx().gem+relicFx().gem+researchFx().gem+eventGemAdd()); }
+function gemFindChance(){ return Math.min(0.95, heroFx().gem+relicFx().gem+researchFx().gem+eventGemAdd()+skillGemAdd()); }
 function gemAllMult(){ return 1+0.25*(S.gem.gALL||0); }
 
 // 동료 특수 능력 합산 → 각종 보정치
@@ -1211,25 +1224,62 @@ window.addEventListener('keydown',e=>{
 });
 
 // ── 액티브 스킬 ──
-let skillState={berserk:{cd:0,buff:0}, gold:{cd:0,buff:0}, smite:{cd:0,buff:0}};
+let skillState={};
+SKILLS.forEach(sk=>{ skillState[sk.id]={cd:0,buff:0}; });
+function skillUnlocked(sk){ return !sk.req || (S.bestStage||1)>=sk.req; }
 function skillCdMult(){ return Math.max(0.4, 1-0.10*(S.gem.gSkill||0)); }   // 각성: 쿨다운 감소
 function useSkill(id){
   const sk=SKILLS.find(s=>s.id===id), st=skillState[id];
   if(!sk||!st||st.cd>0)return;
+  if(!skillUnlocked(sk))return;
+  // 즉시 발동형은 조건을 못 채우면 쿨다운을 돌리지 않고 그냥 알려만 준다
+  if(id==='guard'&&(!mob||mob.phase!=='boss')){ floatNum('보스전에서만 쓸 수 있어요',false,'#ff5a78'); return; }
+  if(id==='purge'&&!firstCursedSlot()){ floatNum('정화할 저주가 없어요',false,'#ff5a78'); return; }
+  if(id==='recall'&&!firstRunningExped()){ floatNum('진행 중인 원정이 없어요',false,'#ff5a78'); return; }
   st.cd=sk.cd*skillCdMult();
   if(sk.dur>0){ st.buff=sk.dur; floatNum('✨ '+sk.nm+' 발동!',true,'#ffce54'); }
   if(id==='smite'){                       // 필살: 즉시 큰 피해
     const dmg=Math.max(clickPower()*60, totalDps()*12, mob.max*0.15);
     dealDamage(dmg,true,true);
   }
-  updateSkills();
+  if(id==='combo'){                       // 연격 각성: 콤보를 즉시 최대치로
+    combo=COMBO_CAP; comboTimer=COMBO_WINDOW; renderCombo();
+    floatNum('🔥 '+COMBO_CAP+' COMBO!',true,'#ffce54');
+  }
+  if(id==='guard'){                       // 결전의 각오: 보스 제한시간 연장
+    mob.timer+=15; floatNum('🛡️ 도주까지 +15초',true,'#5ad17a');
+  }
+  if(id==='purge'){                       // 정화의 빛: 저주 1개 무료 정화
+    const sl=firstCursedSlot();
+    const e=S.equip[sl.id], c=curseById(e.cur);
+    delete e.cur;
+    floatNum('✨ '+sl.nm+' 정화! ('+(c?c.nm:'저주')+' 해제)',true,'#5ad17a');
+    renderShop();
+  }
+  if(id==='recall'){                      // 귀환 나팔: 원정 1개 즉시 완료
+    const d=firstRunningExped();
+    S.exped[d.id].end=Date.now();
+    floatNum('📯 '+d.nm+' 즉시 귀환!',true,'#7ee0ff');
+    updateQuestBadge(); renderShop();
+  }
+  flashSave(); updateSkills();
+}
+// 저주가 걸린 장비 슬롯 중 첫 번째
+function firstCursedSlot(){
+  for(const sl of EQUIP_SLOTS){ const e=S.equip&&S.equip[sl.id]; if(e&&e.lv>0&&e.cur)return sl; }
+  return null;
+}
+// 진행 중(아직 완료 전)인 원정 중 첫 번째
+function firstRunningExped(){
+  for(const d of EXPEDITIONS){ if(expStatus(d)==='running')return d; }
+  return null;
 }
 function renderSkills(){
   const bar=$('skillBar'); if(!bar)return; bar.innerHTML='';
   SKILLS.forEach(sk=>{
     const b=document.createElement('button');
     b.className='skillBtn';
-    b.title=sk.desc;
+    b.title=sk.desc+(sk.req?' (스테이지 '+sk.req+' 해금)':'');
     b.innerHTML=`<div class="si">${sk.ico}</div><div class="sn">${sk.nm}</div><div class="sc"></div>`;
     b.onclick=()=>useSkill(sk.id);
     bar.appendChild(b);
@@ -1240,6 +1290,11 @@ function updateSkills(){
   const bar=$('skillBar'); if(!bar||!bar.children.length)return;
   SKILLS.forEach((sk,i)=>{
     const st=skillState[sk.id], el=bar.children[i]; if(!st||!el)return;
+    if(!skillUnlocked(sk)){                       // 아직 해금 전
+      el.className='skillBtn locked';
+      el.querySelector('.sc').textContent='🔒 St.'+sk.req;
+      return;
+    }
     const active=sk.dur>0&&st.buff>0, ready=st.cd<=0;
     el.className='skillBtn'+(active?' active':(ready?' ready':''));
     el.querySelector('.sc').textContent= active?('발동 '+Math.ceil(st.buff)+'초')
@@ -1479,42 +1534,102 @@ function affordHint(n,sum,have,cur,costAt){
 }
 
 // ── 탐험 ──
-//  S.exped[id] = 완료 시각(ms). 없으면 대기, Date.now()>=값 이면 수령 가능.
+//  S.exped[id] = {end:완료 시각(ms), hero:파견한 동료 id, n:파견 인원}
+//  구버전 세이브는 숫자(완료 시각)만 들어있어 normalizeExped()에서 변환한다.
+function normalizeExped(){
+  if(!S.exped||typeof S.exped!=='object')S.exped={};
+  for(const k in S.exped){
+    const v=S.exped[k];
+    if(typeof v==='number')S.exped[k]={end:v,hero:null,n:0};
+    else if(!v||typeof v!=='object')delete S.exped[k];
+  }
+}
+// 지금 원정에 나가 있는 특정 동료 수
+function dispatchedOf(hid){
+  let n=0;
+  for(const k in (S.exped||{})){ const e=S.exped[k]; if(e&&e.hero===hid)n+=e.n||0; }
+  return n;
+}
+// 전투에 참여 가능한(=파견 나가지 않은) 동료 수
+function heroAvail(hid){ return Math.max(0,(S.heroes[hid]||0)-dispatchedOf(hid)); }
+// 동료의 도감 순번(1~100). 뒤쪽 동료일수록 원정 보상이 좋다.
+function heroRank(hid){ const i=HEROES.findIndex(h=>h.id===hid); return i<0?0:i+1; }
+// 파견대 보정: 강한 동료를 보낼수록 보상이 커진다 (최대 약 ×3)
+function expSquadMult(e){ return e&&e.hero ? 1+heroRank(e.hero)*0.02 : 1; }
 function expUnlocked(def){ return (S.bestStage||1)>=def.reqStage; }
 function expStatus(def){
-  const end=S.exped&&S.exped[def.id];
-  if(!end)return 'idle';
-  return Date.now()>=end?'done':'running';
+  const e=S.exped&&S.exped[def.id];
+  if(!e)return 'idle';
+  return Date.now()>=e.end?'done':'running';
 }
-function startExped(def){
+// 이 원정에 보낼 수 있는 동료 목록(필요 인원 이상 남아 있는 동료만)
+function expCandidates(def){ return HEROES.filter(h=>heroAvail(h.id)>=def.crew); }
+// 파견 화면: 어떤 동료를 보낼지 고른다
+function openExpedPicker(def){
   if(!expUnlocked(def)||expStatus(def)!=='idle')return;
+  const cands=expCandidates(def).slice().reverse();   // 강한 동료를 위에
+  if(!cands.length){
+    openModal('🧭 '+def.nm,
+      `이 원정에는 동료가 <b>${def.crew}명</b> 필요합니다.<br><br>`+
+      `<span style="color:var(--dim)">같은 동료를 ${def.crew}명 이상 모으면 파견할 수 있어요.<br>`+
+      `(전투 중이거나 다른 원정에 나간 동료는 뺀 수치입니다)</span>`,
+      [{t:'닫기',fn:closeModal}]);
+    return;
+  }
+  const rows=cands.map(h=>{
+    const av=heroAvail(h.id), mult=1+heroRank(h.id)*0.02;
+    return `<div class="expPick" data-h="${h.id}">`+
+           `<span style="font-size:18px">${h.ico}</span> `+
+           `<b>${h.nm}</b> <span style="color:var(--dim)">보유 ${av}</span>`+
+           `<span style="float:right;color:var(--gold)">보상 ×${mult.toFixed(2)}</span></div>`;
+  }).join('');
+  openModal('🧭 '+def.nm+' — 동료 파견',
+    `<div style="text-align:left;font-size:13px">`+
+    `필요 인원 <b>${def.crew}명</b> · 소요 <b>${fmtTime(def.dur)}</b><br>`+
+    `<span style="color:var(--bad)">파견한 동료는 돌아올 때까지 DPS에 포함되지 않습니다.</span><br><br>`+
+    `<div style="max-height:220px;overflow:auto">${rows}</div></div>`,
+    [{t:'취소',fn:closeModal}]);
+  document.querySelectorAll('#mBody .expPick').forEach(el=>{
+    el.onclick=()=>{ dispatchExped(def, el.dataset.h); closeModal(); };
+  });
+}
+function dispatchExped(def,hid){
+  if(!expUnlocked(def)||expStatus(def)!=='idle')return;
+  if(heroAvail(hid)<def.crew)return;
+  const h=HEROES.find(x=>x.id===hid); if(!h)return;
   if(!S.exped)S.exped={};
-  S.exped[def.id]=Date.now()+def.dur*1000;
-  flashSave(); renderShop();
+  S.exped[def.id]={end:Date.now()+def.dur*1000, hero:hid, n:def.crew};
+  floatNum('🧭 '+h.ico+' '+h.nm+' ×'+def.crew+' 파견!',true,'#7ee0ff');
+  updateTop(); flashSave(); renderShop();
 }
 function claimExped(def){
   if(expStatus(def)!=='done')return;
+  const e=S.exped[def.id];
+  const sq=expSquadMult(e);                 // 파견한 동료가 강할수록 보상 증가
+  const rank=e&&e.hero?heroRank(e.hero):0;
   const st=Math.max(1,S.maxStage);
-  // 골드: 현재 maxStage 1킬 골드 × 배수 (배수에 약간의 변동)
-  const gold=Math.ceil(goldReward(st,false)*def.goldMul*(0.85+Math.random()*0.3));
+  // 골드: 현재 maxStage 1킬 골드 × 배수 (배수에 약간의 변동) × 파견대 보정
+  const gold=Math.ceil(goldReward(st,false)*def.goldMul*sq*(0.85+Math.random()*0.3));
   S.gold+=gold;
   let msg='💰 '+fmt(gold);
-  // 정수
-  if(def.gemChance>0&&Math.random()<def.gemChance){
+  // 정수 (파견대가 강하면 확률 상승)
+  const gemCh=Math.min(1,def.gemChance+Math.min(0.30,rank*0.003));
+  if(def.gemChance>0&&Math.random()<gemCh){
     const lo=def.gem[0],hi=def.gem[1];
     const g=lo+Math.floor(Math.random()*(hi-lo+1));
     if(g>0){ S.gems+=g; msg+='  💎 +'+g; }
   }
-  // 유물
-  if(def.relicChance>0&&Math.random()<def.relicChance){
+  // 유물 (파견대가 강하면 확률 상승)
+  const relicCh=Math.min(1,def.relicChance+Math.min(0.20,rank*0.002));
+  if(def.relicChance>0&&Math.random()<relicCh){
     const rc=RELICS[Math.floor(Math.random()*RELICS.length)];
     if(!S.relics)S.relics={}; S.relics[rc.id]=(S.relics[rc.id]||0)+1;
     msg+='  '+rc.ico;
     floatNum(rc.ico+' '+rc.nm+' Lv.'+S.relics[rc.id]+'!',true,'#ffd86b');
   }
-  delete S.exped[def.id];
+  delete S.exped[def.id];                   // 파견한 동료가 전투에 복귀한다
   S.expedDone=(S.expedDone||0)+1;
-  floatNum('🗺️ '+def.nm+' 완료! '+msg,true,'#7ee0ff');
+  floatNum('🗺️ '+def.nm+' 완료! '+msg+(sq>1.01?'  (파견대 ×'+sq.toFixed(2)+')':''),true,'#7ee0ff');
   updateTop(); flashSave(); renderShop();
 }
 function expRunningCount(){ let n=0; for(const d of EXPEDITIONS) if(expStatus(d)!=='idle')n++; return n; }
@@ -1529,7 +1644,7 @@ function updateQuestTimers(){
   timers.forEach(el=>{
     const def=EXPEDITIONS.find(d=>d.id===el.dataset.exp);
     if(!def||expStatus(def)!=='running'){ transition=true; return; }
-    el.textContent=fmtTime(Math.max(0,(S.exped[def.id]-Date.now())/1000));
+    el.textContent=fmtTime(Math.max(0,(S.exped[def.id].end-Date.now())/1000));
   });
   if(transition)renderShop();
 }
@@ -1758,15 +1873,25 @@ function renderShop(){
         lvl='🔒 스테이지 '+def.reqStage+' 도달 필요';
         cost='🔒'; costCls=''; onclick=()=>{};
       }else if(status==='running'){
-        const left=Math.max(0,(S.exped[def.id]-Date.now())/1000);
-        lvl='⏳ 진행 중 · 남은 시간 <span class="exp-timer" data-exp="'+def.id+'">'+fmtTime(left)+'</span>';
+        const e=S.exped[def.id];
+        const left=Math.max(0,(e.end-Date.now())/1000);
+        const h=e.hero?HEROES.find(x=>x.id===e.hero):null;
+        lvl=(h?('🧭 '+h.ico+' '+h.nm+' ×'+e.n+' 원정 중<br>'):'')+
+            '⏳ 남은 시간 <span class="exp-timer" data-exp="'+def.id+'">'+fmtTime(left)+'</span>';
         cost='⏳'; costCls=''; onclick=()=>{};
       }else if(status==='done'){
-        lvl='🎁 완료! 눌러서 보상 수령';
+        const e=S.exped[def.id];
+        const h=e.hero?HEROES.find(x=>x.id===e.hero):null;
+        lvl=(h?('🧭 '+h.ico+' '+h.nm+' 귀환 · 보상 ×'+expSquadMult(e).toFixed(2)+'<br>'):'')+
+            '🎁 완료! 눌러서 보상 수령';
         cost='🎁 수령'; costCls='gem ok'; onclick=()=>claimExped(def);
       }else{
-        lvl='소요 '+fmtTime(def.dur)+' · 보상 '+rewardLine;
-        cost='파견 ▶'; costCls='ok'; onclick=()=>startExped(def);
+        const n=expCandidates(def).length;
+        lvl='소요 '+fmtTime(def.dur)+' · 보상 '+rewardLine+'<br>'+
+            '🧭 동료 '+def.crew+'명 필요'+
+            (n?' <span style="color:var(--good)">· 보낼 수 있는 동료 '+n+'종</span>'
+              :' <span style="color:var(--bad)">· 인원 부족</span>');
+        cost='파견 ▶'; costCls=n?'ok':'no'; onclick=()=>openExpedPicker(def);
       }
       list.appendChild(card({
         ico:(status==='done'?'🎁':def.ico), nm:def.nm,
@@ -1778,6 +1903,8 @@ function renderShop(){
     info.innerHTML=`🗺️ <b>탐험</b> (완료한 원정 ${S.expedDone||0}회)<br>`+
       `· 파견하면 <b>실제 시간</b>이 지난 뒤 보상을 받습니다 (게임을 꺼도 진행돼요)<br>`+
       `· 보상은 현재 <b>최고 스테이지(${S.maxStage})</b> 기준으로 커집니다<br>`+
+      `· <b>파견한 동료는 돌아올 때까지 DPS에서 빠집니다</b> — 지금의 딜과 보상을 저울질하세요<br>`+
+      `· 도감 뒤쪽의 강한 동료를 보낼수록 보상이 <b>최대 ×3</b>까지 커집니다<br>`+
       `· 더 깊은 스테이지에 도달하면 새 원정이 해금됩니다`;
     list.appendChild(info);
   }else if(activeTab==='forge'){
@@ -2051,6 +2178,9 @@ function doPrestige(g){
     research:S.research||{active:null,done:{}}, // 연구 결과(영구) 보존
     exped:S.exped||{}, expedDone:S.expedDone||0, lastDaily:S.lastDaily||0,
     tutorialDone:!!S.tutorialDone, endingSeen:!!S.endingSeen, omegaSeen:!!S.omegaSeen };
+  // 환생하면 동료가 초기화되므로, 진행 중인 원정의 파견대도 해산한다.
+  // (원정 자체와 남은 시간은 유지되지만 파견대 보정은 사라진다 → 환생 직전 파견 악용 방지)
+  for(const k in keep.exped){ const e=keep.exped[k]; if(e&&typeof e==='object'){ e.hero=null; e.n=0; } }
   const startBonus=3*(keepGem.gStart||0);
   S=defaultState();
   Object.assign(S,keep);
@@ -2131,7 +2261,7 @@ function load(){
       S.heroes=d.heroes||{};
       S.achClaimed=d.achClaimed||{};
       S.bossCleared=d.bossCleared||{};
-      S.exped=d.exped||{}; S.expedDone=d.expedDone||0;
+      S.exped=d.exped||{}; S.expedDone=d.expedDone||0; normalizeExped();
       S.lastDaily=d.lastDaily||0;
       S.rouletteSpins=d.rouletteSpins||0;
       S.prestiges=d.prestiges||0;
@@ -2327,11 +2457,12 @@ const HELP_SECTIONS=[
   {t:'👆 전투',      d:'몬스터를 탭하면 <b>클릭 피해</b>가 들어가고, 연속 클릭 시 <b>콤보</b>·<b>치명타</b>가 터집니다. 일반 스테이지는 4마리, 10의 배수는 <b>제한 시간 보스</b>.'},
   {t:'📊 4가지 수치', d:'💰 골드 = 구매 재화 · ⚔️ 초당 피해 = 방치 중에도 들어가는 자동 피해 · 👆 클릭 피해 · 💎 정수 = 환생/뽑기로 얻는 귀한 재화.'},
   {t:'🧭 스테이지',   d:'◀ ▶ 로 클리어한 스테이지를 오갈 수 있어요. <b>자동진행</b>을 켜면 클리어마다 전진, 벽에 막히면 꺼두고 골드를 모으세요.'},
-  {t:'🔥 스킬',      d:'쿨타임마다 쓰는 강력한 버프. 피해·골드 획득이 크게 오르니 <b>보스 직전</b>에 쓰는 게 이득입니다.'},
+  {t:'🔥 스킬',      d:'쿨타임마다 쓰는 강력한 버프. 피해·골드 획득이 크게 오르니 <b>보스 직전</b>에 쓰는 게 이득입니다. 스테이지를 올리면 <b>연격 각성·결전의 각오·정수의 축복·정화의 빛·귀환 나팔</b>이 차례로 해금됩니다.'},
   {t:'🏪 성장',      d:'동료 · 대장간 · 강화 · 연구 · 뽑기 · 탐험 · 정수 · 유물 · 도전 탭에서 성장합니다. 탭의 <b>빨간 점</b>은 받을 보상이 있다는 뜻.'},
   {t:'🛡️ 우선순위',  d:'가장 먼저 <b>동료</b>. 살수록 초당 피해가 올라 자리를 비워도 사냥이 이어집니다. 골드가 모이면 계속 구매하세요.'},
   {t:'🔢 대량 구매',  d:'구매 배수 버튼으로 x1 / x10 / x100 / 최대를 바꿀 수 있어요. 후반엔 <b>최대</b>가 편합니다.'},
   {t:'💀 환생',      d:'일정 스테이지 이후 환생 가능. 골드·동료는 초기화되지만 <b>정수</b>를 얻고 정수 강화·유물·장비·연구는 남아 훨씬 빠르게 내려갑니다.'},
+  {t:'🗺️ 탐험',      d:'원정에는 <b>동료를 파견</b>해야 합니다. 파견한 동료는 돌아올 때까지 <b>초당 피해에서 빠지므로</b>, 지금의 사냥 속도와 원정 보상을 저울질하세요. 도감 뒤쪽의 강한 동료를 보낼수록 보상이 <b>최대 ×3</b>까지 커집니다.'},
   {t:'🌙 방치 보상',  d:'게임을 꺼도 동료들은 싸웁니다. 다시 접속하면 자리를 비운 동안의 보상을 받아요.'},
 ];
 function openHelp(){
